@@ -36,7 +36,8 @@ async function startServer() {
   });
 
   // Proxy /api to the Python backend
-  app.use("/api", createProxyMiddleware({
+  app.use(createProxyMiddleware({
+    pathFilter: "/api",
     target: "http://127.0.0.1:8000",
     changeOrigin: true,
     ws: true
