@@ -415,6 +415,11 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                     df_apply_riders = pd.DataFrame({"团队名称": team_ser.values, "骑手ID": id_ser.values, "骑手姓名": name_ser.values})
                     df_apply_riders.columns = df_sht2.columns if len(df_sht2.columns) == 3 else ["团队名称", "骑手ID", "骑手姓名"]
                     
+                    if len(df_sht2.columns) > 1:
+                        # Only add riders whose ID is not already in df_sht2 to avoid adding wrong stations
+                        existing_ids = set(df_sht2.iloc[:, 1].astype(str).str.replace('.0', '', regex=False).str.strip())
+                        df_apply_riders = df_apply_riders[~df_apply_riders.iloc[:, 1].astype(str).str.replace('.0', '', regex=False).str.strip().isin(existing_ids)]
+
                     df_sht2 = pd.concat([df_sht2, df_apply_riders], ignore_index=True)
                 except Exception as e:
                     log(f"合并申请名单数据失败: {e}", "WARN")
@@ -424,7 +429,9 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                     df_sht2.iloc[:, 1] = df_sht2.iloc[:, 1].astype(str).str.replace('.0', '', regex=False).str.strip()
                     df_sht2.iloc[:, 1] = df_sht2.iloc[:, 1].replace(r'^\s*$', np.nan, regex=True).replace("nan", np.nan).replace("None", np.nan)
                     df_sht2.iloc[:, 1] = df_sht2.iloc[:, 1].replace("", np.nan)
-                df_sht2.dropna(subset=[df_sht2.columns[1]], inplace=True)
+                    df_sht2.dropna(subset=[df_sht2.columns[1]], inplace=True)
+                    # Convert back to numeric to preserve numeric type in output Excel
+                    df_sht2.iloc[:, 1] = pd.to_numeric(df_sht2.iloc[:, 1], errors='ignore')
                 df_sht2.drop_duplicates(subset=[df_sht2.columns[0], df_sht2.columns[1]], keep='first', inplace=True)
                 df_sht2.sort_values(by=df_sht2.columns[0], ascending=True, inplace=True)
                 df_sht2.reset_index(drop=True, inplace=True)
@@ -1041,8 +1048,7 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                             cell.font = red_font_header if cell.row == 1 else red_font_strike
                         else:
                             cell.border = border
-                            if ws.title not in ["配送所得表", "安全基金"]:
-                                cell.font = font_style
+                            # DO NOT overwrite cell.font because it ruins the template's font
     
                         if val is None: continue
     

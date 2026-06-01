@@ -32,6 +32,27 @@ class ConfigRequest(BaseModel):
     theme: dict = None
     issueSelectedCities: list[str] = None
 
+CONFIG_FILE = ".aegis_config.json"
+
+@app.get("/api/config")
+def get_config():
+    if os.path.exists(CONFIG_FILE):
+        try:
+            with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except:
+            pass
+    return {}
+
+@app.post("/api/config")
+def save_config(params: dict):
+    try:
+        with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
+            json.dump(params, f, ensure_ascii=False, indent=2)
+        return {"success": True}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
 @app.get("/api/dialog/folder")
 def select_folder(title: str = "选择文件夹 (Aegis)"):
     try:

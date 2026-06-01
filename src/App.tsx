@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { THEMES } from './constants';
 import { LogEntry, AppConfig } from './types';
 import { Header } from './components/Header';
@@ -78,20 +78,58 @@ export default function App() {
   const [logs, setLogs] = useState<LogEntry[]>([{ text: theme.log_init, level: 'INFO' }]);
   const [activeTab, setActiveTab] = useState<'task'|'output'>('output');
   
-  const [appConfig, setAppConfig] = useState<AppConfig>({
-    city: '深圳',
-    cycle: '日结',
-    issueCycle: '今天',
-    basePath: '.',
-    sourcePath: './data',
-    workspacePath: '',
-    cities: ["深圳", "北京", "天津", "大连", "保定", "广州", "上海"],
-    cycles: ["日结", "周结", "半月结", "人效号"],
-    issueCycles: ["今天", "本周", "上半月", "下半月", "当月"],
-    issueSelectedCities: ["深圳"],
-    startDate: getLocalToday(),
-    endDate: getLocalToday()
+  const [appConfig, setAppConfig] = useState<AppConfig>(() => {
+    const defaultState: AppConfig = {
+      city: '深圳',
+      cycle: '日结',
+      issueCycle: '今天',
+      basePath: '.',
+      sourcePath: './data',
+      workspacePath: '',
+      cities: ["深圳", "北京", "天津", "大连", "保定", "广州", "上海"],
+      cycles: ["日结", "周结", "半月结", "人效号"],
+      issueCycles: ["今天", "本周", "上半月", "下半月", "当月"],
+      issueSelectedCities: ["深圳"],
+      startDate: getLocalToday(),
+      endDate: getLocalToday()
+    };
+    const saved = localStorage.getItem('appConfig');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        return { ...defaultState, ...parsed };
+      } catch (e) {
+        console.error("Failed to parse appConfig from localStorage", e);
+      }
+    }
+    return defaultState;
   });
+
+  const isLoadedRef = React.useRef(false);
+
+  useEffect(() => {
+    fetch('http://127.0.0.1:8000/api/config')
+      .then(res => res.json())
+      .then(data => {
+        if (data && Object.keys(data).length > 0 && !data.error) {
+          setAppConfig(prev => ({ ...prev, ...data }));
+        }
+      })
+      .catch(err => console.error("Failed to load config from backend", err))
+      .finally(() => {
+        isLoadedRef.current = true;
+      });
+  }, []);
+
+  useEffect(() => {
+    if (!isLoadedRef.current) return;
+    localStorage.setItem('appConfig', JSON.stringify(appConfig));
+    fetch('http://127.0.0.1:8000/api/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(appConfig)
+    }).catch(err => console.error("Failed to save config to backend", err));
+  }, [appConfig]);
 
   const appendLog = (text: string, level: LogEntry['level'] = 'INFO') => {
     setLogs(prev => [...prev, { text, level }]);
