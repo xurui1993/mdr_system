@@ -29,7 +29,7 @@ export function ActionPanel({ theme, isRunning, onRun, progress }: ActionPanelPr
         setTimerText('00:00.0');
       }
     } else {
-      setMutter("💭 核心引擎高速运转中...");
+      setMutter("“路漫漫其修远兮，吾将上下而求索...”");
       
       // Only set startTime once when starting
       if (startTimeRef.current === 0 || progress === 0) {

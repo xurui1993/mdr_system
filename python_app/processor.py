@@ -353,13 +353,19 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                             pass
 
                 headers_sht0 = list(df_source.columns)
-                for c_idx, val in enumerate(headers_sht0, 1): ws_sht0.cell(row=1, column=c_idx, value=val)
-                for r_idx, row_data in enumerate(df_source.itertuples(index=False), 2):
-                    for c_idx, val in enumerate(row_data, 1): ws_sht0.cell(row=r_idx, column=c_idx, value=val)
-
+                if ws_sht0.max_row <= 1:
+                    ws_sht0.append(headers_sht0)
+                
                 last_col = 17 if selected_option == "全职" else 16
                 headers = ["运单状态", "是否周末", "是否欺诈单"]
-                for i, h in enumerate(headers): ws_sht0.cell(row=1, column=last_col + i, value=h)
+                
+                # Append rows directly
+                for row_data in df_source.itertuples(index=False):
+                    ws_sht0.append(row_data)
+
+                # Set extra headers explicitly
+                for i, h in enumerate(headers): 
+                    ws_sht0.cell(row=1, column=last_col + i, value=h)
 
                 if len(df_source) > 0:
                     df_sht2 = df_source.iloc[:, 1:4].copy()
@@ -391,6 +397,8 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                     log(f"合并申请名单数据失败: {e}", "WARN")
 
                 df_sht2.replace(r'^\s*$', np.nan, regex=True, inplace=True)
+                if len(df_sht2.columns) > 1:
+                    df_sht2.iloc[:, 1] = df_sht2.iloc[:, 1].astype(str).str.replace('.0', '', regex=False).str.strip()
                 df_sht2.dropna(subset=[df_sht2.columns[1]], inplace=True)
                 df_sht2.drop_duplicates(subset=[df_sht2.columns[1]], keep='first', inplace=True)
                 df_sht2.sort_values(by=df_sht2.columns[0], ascending=True, inplace=True)
@@ -400,9 +408,10 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                 data_list = df_sht2.values.tolist()
                 headers_sht2 = df_sht2.columns.tolist() if len(df_sht2.columns) >= 3 else ["团队名称", "骑手ID", "骑手姓名"]
 
-                for c_idx, val in enumerate(headers_sht2, 1): ws_sht2.cell(row=1, column=c_idx, value=val)
-                for r_idx, row_data in enumerate(data_list, 2):
-                    for c_idx, val in enumerate(row_data, 1): ws_sht2.cell(row=r_idx, column=c_idx, value=val)
+                if ws_sht2.max_row <= 1:
+                    ws_sht2.append(headers_sht2)
+                for row_data in data_list:
+                    ws_sht2.append(row_data)
 
                 last_row_sht2 = len(data_list) + 1
                 num_riders = last_row_sht2 - 1
@@ -514,12 +523,9 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                     if "欺诈单" in str(row[6]): row[12], row[13], row[14] = "是", "欺诈单不考核", 0
 
                 ws_wg = wb1["违规索赔"]
-                start_row = 1
-                while ws_wg.cell(row=start_row, column=1).value is not None: start_row += 1
 
-                if start_row == 1:
-                    for c_idx, h_val in enumerate(headers, 1): ws_wg.cell(row=start_row, column=c_idx, value=h_val)
-                    start_row += 1
+                if ws_wg.max_row <= 1:
+                    ws_wg.append(headers)
 
                 added_penalty_count = 0
                 wb_idx = next((i for i, c in enumerate(headers) if any(kw in str(c) for kw in ["运单", "订单", "单号"])), 10)
@@ -544,15 +550,13 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                             intercept_records.append((src_file, "索赔扣款", wb_val, r_id, r_name))
                             dup_sources[src_file] = dup_sources.get(src_file, 0) + 1
                         else:
-                            for c_idx, val in enumerate(row, 1): ws_wg.cell(row=start_row, column=c_idx, value=val)
-                            start_row += 1
+                            ws_wg.append(row)
                             added_penalty_count += 1
                     for src_file, count in dup_sources.items(): log(
                         f"💥 [红牌拦截] 发现 {count} 条【违规索赔】重复记录！(源自历史文件: {src_file})", "ERROR")
                 else:
                     for row in data_arr:
-                        for c_idx, val in enumerate(row, 1): ws_wg.cell(row=start_row, column=c_idx, value=val)
-                        start_row += 1
+                        ws_wg.append(row)
                         added_penalty_count += 1
 
                 stats_info["penalty_orders"] += added_penalty_count
@@ -569,24 +573,32 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                 try:
                     df_source.iloc[:, 1] = pd.to_datetime(df_source.iloc[:, 1].astype(str).str.split(' ').str[0],
                                                           errors='coerce').dt.strftime('%Y-%m-%d')
-                    df_source.iloc[:, 1].fillna("", inplace=True)
+                    df_source.iloc[:, 1] = df_source.iloc[:, 1].fillna("")
                 except Exception:
                     pass
 
                 rules_headers = df_rules.columns.tolist()
                 rules_data = df_rules.values.tolist()
 
-                for pos_idx in range(len(df_source)):
-                    row = df_source.iloc[pos_idx]
-                    is_fraud = "是" if str(row.iloc[2]) in dictp_fraud else "否"
-                    df_source.iat[pos_idx, 12] = is_fraud
-                    col1_val = row.iloc[0]
-                    if col1_val in rules_headers:
-                        wtd_idx = rules_headers.index(col1_val)
+                is_fraud_info = df_source.iloc[:, 2].astype(str).isin(dictp_fraud).map({True: "是", False: "否"}).tolist()
+                col0_list = df_source.iloc[:, 0].tolist()
+                col5_list = df_source.iloc[:, 5].astype(str).tolist()
+                
+                fast_vals = []
+                for r0, r5, fraud in zip(col0_list, col5_list, is_fraud_info):
+                    val = np.nan
+                    if fraud == "是":
+                        val = 0
+                    elif r0 in rules_headers:
+                        wtd_idx = rules_headers.index(r0)
                         for rule_row in rules_data:
-                            if str(rule_row[1]) in str(row.iloc[5]):
-                                df_source.iat[pos_idx, 11] = 0 if is_fraud == "是" else rule_row[wtd_idx]
+                            if str(rule_row[1]) in r5:
+                                val = rule_row[wtd_idx]
                                 break
+                    fast_vals.append(val)
+                
+                df_source.iloc[:, 12] = is_fraud_info
+                df_source.iloc[:, 11] = fast_vals
 
                 ws_wtd = wb1["问题单"]
                 clean_problem_waybills = df_source.iloc[:, 2].apply(clean_wb_str)
@@ -613,9 +625,10 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                         f"💥 [红牌拦截] 发现 {count} 条【问题单】重复记录！(源自历史文件: {src_file})", "ERROR")
 
                 headers_wtd = list(df_source.columns)
-                for c_idx, val in enumerate(headers_wtd, 1): ws_wtd.cell(row=1, column=c_idx, value=val)
-                for r_idx, row_data in enumerate(df_source.itertuples(index=False), 2):
-                    for c_idx, val in enumerate(row_data, 1): ws_wtd.cell(row=r_idx, column=c_idx, value=val)
+                if ws_wtd.max_row <= 1:
+                    ws_wtd.append(headers_wtd)
+                for row_data in df_source.itertuples(index=False):
+                    ws_wtd.append(row_data)
 
             elif "支付绑定" in wb_name:
                 try:
@@ -649,9 +662,9 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                 ws_bind.delete_rows(1, ws_bind.max_row)
 
                 headers_bind = list(df_source_filtered.columns)
-                for c_idx, val in enumerate(headers_bind, 1): ws_bind.cell(row=1, column=c_idx, value=val)
-                for r_idx, row_data in enumerate(df_source_filtered.itertuples(index=False), 2):
-                    for c_idx, val in enumerate(row_data, 1): ws_bind.cell(row=r_idx, column=c_idx, value=val)
+                ws_bind.append(headers_bind)
+                for row_data in df_source_filtered.itertuples(index=False):
+                    ws_bind.append(row_data)
 
             log(random.choice(theme['msg_success']).format(wb_name=wb_name))
             processed_count += 1
@@ -715,9 +728,7 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
             target_idx_daily = wb1.sheetnames.index("配送所得表") + 1 if "配送所得表" in wb1.sheetnames else 2
             ws_daily = wb1.create_sheet(title="日单量", index=target_idx_daily)
 
-        daily_r_idx = 1
-        for c_idx, val in enumerate(headers_abcd, 1): ws_daily.cell(row=daily_r_idx, column=c_idx, value=val)
-        daily_r_idx += 1
+        ws_daily.append(headers_abcd)
 
         no_price_records = []
         from collections import defaultdict
@@ -761,8 +772,7 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
             rider_prices_dict[rider_key].add(str(price))
             rider_price_dates_dict[rider_key][str(price)].append(b_date)
 
-            for c_idx, val in enumerate(full_row, 1): ws_daily.cell(row=daily_r_idx, column=c_idx, value=val)
-            daily_r_idx += 1
+            ws_daily.append(full_row)
 
         def format_dates_streak(date_strs):
             if not date_strs: return ""
@@ -810,9 +820,7 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
 
             ws_noprice.sheet_properties.tabColor = "FF9900"
             headers_noprice = ["团队名称", "骑手ID", "骑手姓名", "蓝橙无单价日期"]
-            noprice_r_idx = 1
-            for c_idx, val in enumerate(headers_noprice, 1): ws_noprice.cell(row=noprice_r_idx, column=c_idx, value=val)
-            noprice_r_idx += 1
+            ws_noprice.append(headers_noprice)
 
             for rec in no_price_records:
                 b_date = _norm_date(rec[0])
@@ -825,8 +833,7 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
             for key, dates in grouped.items():
                 date_str = format_dates_streak(dates) + "无单价"
                 row_vals = [key[0], key[1], key[2], date_str]
-                for c_idx, val in enumerate(row_vals, 1): ws_noprice.cell(row=noprice_r_idx, column=c_idx, value=val)
-                noprice_r_idx += 1
+                ws_noprice.append(row_vals)
 
         try:
             if "配送所得表" in wb1.sheetnames:

@@ -643,7 +643,7 @@ export default function App() {
                 <TerminalPanel logs={logs} />
               </div>
               <div className="flex-[3] min-w-0 flex flex-col h-full rounded-xl overflow-hidden shadow-[inset_0_2px_15px_rgba(0,0,0,0.8)] border border-sky-500/10 bg-slate-950/60">
-                <RightPanel theme={theme} activeTab={activeTab} />
+                <RightPanel theme={theme} activeTab={activeTab} config={appConfig} isRunning={isRunning} />
               </div>
             </div>
             

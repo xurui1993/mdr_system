@@ -128,6 +128,32 @@ def open_explorer(path: str):
     else:
         return {"success": False, "error": "目录不存在"}
 
+@app.get("/api/files")
+def list_files(path: str):
+    if not path or not os.path.exists(path):
+        return {"files": []}
+    
+    if os.path.isfile(path):
+        path = os.path.dirname(path)
+
+    try:
+        items = []
+        for f in os.listdir(path):
+            if not f.startswith("~") and not f.startswith("."):
+                f_path = os.path.join(path, f)
+                is_dir = os.path.isdir(f_path)
+                items.append({
+                    "name": f,
+                    "path": f_path,
+                    "is_dir": is_dir,
+                    "size": 0 if is_dir else os.path.getsize(f_path)
+                })
+        # Sort directories first, then alphabetically
+        items.sort(key=lambda x: (not x["is_dir"], x["name"].lower()))
+        return {"files": items}
+    except Exception as e:
+        return {"files": []}
+
 @app.post("/api/run")
 async def run_calculation(config: ConfigRequest):
     """
