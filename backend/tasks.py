@@ -362,71 +362,44 @@ async def run_raise_price_gen(salary_file, price_file):
                     else: ws_income.cell(row=r_idx, column=remark_col_idx, value="")
 
         yield create_progress_event(0.7)
+        yield create_log_event(">>> 正在执行薪资方案比对及精准标红...", "SYSTEM")
+
+        from openpyxl.styles import PatternFill
+        red_fill = PatternFill(start_color="FFFF0000", end_color="FFFF0000", fill_type="solid")
+        no_fill = PatternFill(fill_type=None)
+        
+        plan_col_idx = -1
+        for r in range(1, min(6, ws_income.max_row + 1)):
+            for c in range(1, ws_income.max_column + 1):
+                if "薪资方案" in str(ws_income.cell(row=r, column=c).value or ""):
+                    plan_col_idx = c
+                    break
+            if plan_col_idx != -1: break
+
+        if leishen_price_col_idx != -1 and plan_col_idx != -1:
+            def is_equal(v1, v2):
+                s1 = str(v1).strip() if v1 is not None else ""
+                s2 = str(v2).strip() if v2 is not None else ""
+                if s1 == s2: return True
+                try: return float(s1) == float(s2)
+                except: return False
+
+            for r_idx in range(4, ws_income.max_row + 1):
+                cell_plan = ws_income.cell(row=r_idx, column=plan_col_idx)
+                cell_plan.fill = no_fill
+                
+                val_lei = ws_income.cell(row=r_idx, column=leishen_price_col_idx).value
+                val_plan = cell_plan.value
+                
+                s_lei = str(val_lei).strip() if val_lei is not None else ""
+                s_plan = str(val_plan).strip() if val_plan is not None else ""
+                
+                if s_lei and s_plan and s_lei != "无单价" and not is_equal(val_lei, val_plan):
+                    cell_plan.fill = red_fill
+
+        yield create_log_event(">>> 🎯 薪资方案比对完成，差异项已无情标红！", "SUCCESS")
+        
         wb.save(salary_file)
-
-        yield create_log_event(">>> 正在唤醒底层 Excel 引擎，执行薪资方案比对及精准标红...", "SYSTEM")
-        try:
-            import win32com.client
-            excel = win32com.client.DispatchEx("Excel.Application")
-            excel.Visible = False
-            excel.DisplayAlerts = False
-
-            abs_final_path = os.path.abspath(salary_file)
-            wb_com = excel.Workbooks.Open(abs_final_path, UpdateLinks=False)
-            ws_com = wb_com.Sheets("配送所得表")
-
-            max_row = ws_com.UsedRange.Rows.Count + ws_com.UsedRange.Row - 1
-            max_col = ws_com.UsedRange.Columns.Count + ws_com.UsedRange.Column - 1
-
-            lei_col, plan_col = -1, -1
-
-            header_vals = ws_com.Range(ws_com.Cells(1, 1), ws_com.Cells(5, max_col)).Value
-            if header_vals:
-                for r in range(min(5, len(header_vals))):
-                    for c in range(len(header_vals[r])):
-                        val = str(header_vals[r][c] or "").strip()
-                        if "蓝橙单价" in val: lei_col = c + 1
-                        if "薪资方案" in val: plan_col = c + 1
-
-            if lei_col != -1 and plan_col != -1 and max_row >= 4:
-                def is_equal(v1, v2):
-                    s1 = str(v1).strip() if v1 is not None else ""
-                    s2 = str(v2).strip() if v2 is not None else ""
-                    if s1 == s2: return True
-                    try: return float(s1) == float(s2)
-                    except: return False
-
-                range_lei = ws_com.Range(ws_com.Cells(4, lei_col), ws_com.Cells(max_row, lei_col))
-                range_plan = ws_com.Range(ws_com.Cells(4, plan_col), ws_com.Cells(max_row, plan_col))
-                range_plan.Interior.ColorIndex = -4142
-
-                lei_values = range_lei.Value
-                plan_values = range_plan.Value
-                range_plan.Value = plan_values
-
-                if max_row == 4:
-                    lei_values = [[lei_values]]
-                    plan_values = [[plan_values]]
-
-                for i in range(len(lei_values)):
-                    val_lei = lei_values[i][0]
-                    val_plan = plan_values[i][0]
-                    str_lei = str(val_lei).strip() if val_lei is not None else ""
-                    str_plan = str(val_plan).strip() if val_plan is not None else ""
-
-                    if str_lei and str_plan and str_lei != "无单价" and not is_equal(val_lei, val_plan):
-                        ws_com.Cells(i + 4, plan_col).Interior.Color = 255
-
-            wb_com.Save()
-            wb_com.Close()
-            excel.Quit()
-            yield create_log_event(">>> 🎯 薪资方案比对完成，差异项已无情标红！", "SUCCESS")
-        except ImportError:
-            yield create_log_event("系统缺少 pywin32 库，跳过单价标红操作！", "WARN")
-        except Exception as e:
-            yield create_log_event(f"COM 引擎比对标红时发生异常: {e}", "WARN")
-            try: excel.Quit()
-            except: pass
 
         yield create_progress_event(1.0)
         yield create_log_event(f">>> 🎉 蓝橙单价重刷全部完成！新文件已覆盖: {os.path.basename(salary_file)}", "SUCCESS")
@@ -462,7 +435,7 @@ async def run_summary_parttime_gen(folder, city):
             wb_name_no_ext = os.path.splitext(f_name)[0]
             
             try:
-                # Use openpyxl instead of win32com for a massive speed boost
+                # 使用 openpyxl 替代 win32com 以获得巨大的性能提升
                 wb = openpyxl.load_workbook(f_path, data_only=True, read_only=True)
             except Exception as e:
                 yield create_log_event(f"跳过不可读文件: {f_name} - {str(e)}", "WARN")
@@ -471,7 +444,7 @@ async def run_summary_parttime_gen(folder, city):
             try:
                 if "安全基金" in wb.sheetnames:
                     ws_fun = wb["安全基金"]
-                    # read rows lazily
+                    # 延迟读取行数据
                     rows = list(ws_fun.iter_rows(values_only=True))
                     if len(rows) >= 1:
                         if not fun_headers:
@@ -628,25 +601,15 @@ async def run_summary_parttime_gen(folder, city):
             yield create_log_event(">>> 所选目录为空或只有无关文件，未生成合并总表~", "WARN")
             yield create_finish_event("error", "所选目录为空")
 
-    except ImportError:
-        yield create_log_event("系统缺少 pywin32 库，无法合并文件！", "ERROR")
-        yield create_finish_event("error", "未安装 pywin32")
     except Exception as e:
         yield create_log_event(f"合并报表时出现意外: {e}", "ERROR")
         yield create_finish_event("error", str(e))
-        try: excel.Quit()
-        except: pass
 
 async def run_main_calculation_gen(city, selected_option, source_folder, base_path, theme, workspace_path=None):
     import sys
     import os
     import threading
     import asyncio
-    
-    # Add python_app to sys.path if not there
-    app_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "python_app")
-    if app_path not in sys.path:
-        sys.path.append(app_path)
     
     try:
         from processor import process_rider_data

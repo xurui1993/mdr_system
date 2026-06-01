@@ -83,7 +83,7 @@ export default function App() {
       city: '深圳',
       cycle: '日结',
       issueCycle: '今天',
-      basePath: '.',
+      basePath: '..',
       sourcePath: './data',
       workspacePath: '',
       cities: ["深圳", "北京", "天津", "大连", "保定", "广州", "上海"],
@@ -108,7 +108,7 @@ export default function App() {
   const isLoadedRef = React.useRef(false);
 
   useEffect(() => {
-    fetch('http://127.0.0.1:8000/api/config')
+    fetch('/api/config')
       .then(res => res.json())
       .then(data => {
         if (data && Object.keys(data).length > 0 && !data.error) {
@@ -124,7 +124,7 @@ export default function App() {
   useEffect(() => {
     if (!isLoadedRef.current) return;
     localStorage.setItem('appConfig', JSON.stringify(appConfig));
-    fetch('http://127.0.0.1:8000/api/config', {
+    fetch('/api/config', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(appConfig)
@@ -159,7 +159,7 @@ export default function App() {
       try {
         setLogs([{ text: `>>> 📂 正在拉起目录选择器，请选择包含已核算工资表的文件夹目录...`, level: 'SYSTEM' }]);
         setIsRunning(false);
-        const dialogEndpoint = 'http://127.0.0.1:8000/api/dialog/folder?title=' + encodeURIComponent('选择包含已核算工资表的文件夹');
+        const dialogEndpoint = '/api/dialog/folder?title=' + encodeURIComponent('选择包含已核算工资表的文件夹');
         const response = await fetch(dialogEndpoint);
         const data = await response.json();
         
@@ -190,7 +190,7 @@ export default function App() {
         } else {
           setLogs([{ text: `>>> 📊 正在拉起目录选择器，请选择要合并已发的兼职文件夹目录...`, level: 'SYSTEM' }]);
           
-          const dialogEndpoint = 'http://127.0.0.1:8000/api/dialog/folder?title=' + encodeURIComponent('选择要合并已发的兼职文件夹目录');
+          const dialogEndpoint = '/api/dialog/folder?title=' + encodeURIComponent('选择要合并已发的兼职文件夹目录');
           const response = await fetch(dialogEndpoint);
           const data = await response.json();
           if (data.path) {
@@ -211,7 +211,7 @@ export default function App() {
     } else if (action === 'open_config') {
       try {
         setLogs([{ text: `>>> 🛠️ 正在尝试打开配置表 (config.xlsx)...`, level: 'INFO' }]);
-        const response = await fetch(`http://127.0.0.1:8000/api/open/config?path=${encodeURIComponent(appConfig.basePath)}`);
+        const response = await fetch(`/api/open/config?path=${encodeURIComponent(appConfig.basePath)}`);
         const data = await response.json();
         
         if (data.success) {
@@ -229,7 +229,7 @@ export default function App() {
         // if the file does not exist
         setLogs(prev => [...prev, { text: `>>> ❌ 未能在当前挂载盘找到 config.xlsx，请重新选择配置文件...`, level: 'WARN' }]);
         showToast('未找到配置文件，请重新选择', 'warn');
-        const r = await fetch('http://127.0.0.1:8000/api/dialog/file?title=' + encodeURIComponent('选择 config.xlsx 配置文件'));
+        const r = await fetch('/api/dialog/file?title=' + encodeURIComponent('选择 config.xlsx 配置文件'));
         const d = await r.json();
         if (d.path) {
           setAppConfig(prev => ({ ...prev, basePath: d.path }));
@@ -247,7 +247,7 @@ export default function App() {
     } else if (action === 'open_source') {
       try {
         setLogs([{ text: `>>> 📁 [系统交互] 正在拉起本地目录选择器...`, level: 'INFO' }]);
-        const smartResp = await fetch(`http://127.0.0.1:8000/api/dialog/smart_source?basePath=${encodeURIComponent(appConfig.basePath)}`);
+        const smartResp = await fetch(`/api/dialog/smart_source?basePath=${encodeURIComponent(appConfig.basePath)}`);
         const smartData = await smartResp.json();
         
         if (smartData.smart && smartData.path) {
@@ -256,7 +256,7 @@ export default function App() {
           showToast('已自动映射数据源', 'success');
         } else {
           setLogs(prev => [...prev, { text: `>>> ⚠️ 未检测到爬虫数据，尝试手动选择数据源...`, level: 'WARN' }]);
-          const response = await fetch('http://127.0.0.1:8000/api/dialog/folder?title=' + encodeURIComponent('未发现爬虫下载目录，请自行选择数据源文件夹'));
+          const response = await fetch('/api/dialog/folder?title=' + encodeURIComponent('未发现爬虫下载目录，请自行选择数据源文件夹'));
           const data = await response.json();
           if (data.path) {
             setAppConfig(prev => ({ ...prev, sourcePath: data.path }));
@@ -280,7 +280,7 @@ export default function App() {
     } else if (action === 'open_workspace') {
       try {
         setLogs([{ text: `>>> 📁 [系统交互] 正在拉起工作空间目录选择器...`, level: 'INFO' }]);
-        const response = await fetch('http://127.0.0.1:8000/api/dialog/folder?title=' + encodeURIComponent('选择个人工作空间目录'));
+        const response = await fetch('/api/dialog/folder?title=' + encodeURIComponent('选择个人工作空间目录'));
         const data = await response.json();
         if (data.path) {
           setAppConfig(prev => ({ ...prev, workspacePath: data.path }));
@@ -315,7 +315,7 @@ export default function App() {
       return;
     } else if (action === 'add_task_root') {
       try {
-        const response = await fetch('http://127.0.0.1:8000/api/dialog/folder?title=' + encodeURIComponent('挂载新的数据卷'));
+        const response = await fetch('/api/dialog/folder?title=' + encodeURIComponent('挂载新的数据卷'));
         const data = await response.json();
         if (data.path) {
           setAppConfig(prev => ({ ...prev, sourcePath: data.path }));
@@ -332,7 +332,7 @@ export default function App() {
       try {
         const outputBase = appConfig.workspacePath || appConfig.basePath;
         const targetPath = activeTab === 'task' ? appConfig.sourcePath : outputBase;
-        const resp = await fetch(`http://127.0.0.1:8000/api/open/explorer?path=${encodeURIComponent(targetPath)}`);
+        const resp = await fetch(`/api/open/explorer?path=${encodeURIComponent(targetPath)}`);
         const data = await resp.json();
         if (data.success) {
            setLogs(prev => [...prev, { text: `>>> 📂 成功打开目录: ${targetPath}`, level: 'SUCCESS' }]);
@@ -354,7 +354,7 @@ export default function App() {
     }
 
     try {
-      const response = await fetch('http://127.0.0.1:8000/api/run', {
+      const response = await fetch('/api/run', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -429,7 +429,7 @@ export default function App() {
     // Check if sourcePath is missing or default
     if (!appConfig.sourcePath || appConfig.sourcePath === './data' || appConfig.sourcePath === '.') {
       try {
-        const smartResp = await fetch(`http://127.0.0.1:8000/api/dialog/smart_source?basePath=${encodeURIComponent(appConfig.basePath)}`);
+        const smartResp = await fetch(`/api/dialog/smart_source?basePath=${encodeURIComponent(appConfig.basePath)}`);
         const smartData = await smartResp.json();
         
         if (smartData.smart && smartData.path) {
@@ -438,7 +438,7 @@ export default function App() {
           appendLog(`[INFO] 检测到爬虫数据，已自动映射数据源目录: ${smartData.path}`, 'INFO');
         } else {
           appendLog(`[WARN] 未检测到【爬虫下载】目录，无法直接运行，请指定数据源...`, 'WARN');
-          const response = await fetch('http://127.0.0.1:8000/api/dialog/folder?title=' + encodeURIComponent('请自行选择数据源文件夹'));
+          const response = await fetch('/api/dialog/folder?title=' + encodeURIComponent('请自行选择数据源文件夹'));
           const data = await response.json();
           if (data.path) {
             effectiveConfig.sourcePath = data.path;
@@ -460,7 +460,7 @@ export default function App() {
     appendLog(`[INFO] 连接本地Python核心引擎中...`, 'INFO');
 
     try {
-      const response = await fetch('http://127.0.0.1:8000/api/run', {
+      const response = await fetch('/api/run', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

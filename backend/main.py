@@ -7,8 +7,6 @@ import os
 import sys
 import json
 import subprocess
-import tkinter as tk
-from tkinter import filedialog
 
 app = FastAPI(title="Aegis Payroll Core API")
 
@@ -76,12 +74,12 @@ sys.stdout.write(path)
 @app.get("/api/dialog/smart_source")
 def check_smart_source(basePath: str = ""):
     candidates = []
-    # If a basePath is provided (like the appConfig.basePath), check inside it
+    # 如果提供了 basePath (例如 appConfig.basePath)，则在其内部查找
     if basePath and os.path.exists(basePath):
         d = basePath if os.path.isdir(basePath) else os.path.dirname(basePath)
         candidates.append(os.path.join(d, "爬虫下载"))
     
-    # Also check current backend directory
+    # 同时也检查当前后端运行目录
     candidates.append(os.path.abspath("爬虫下载"))
     
     for candidate in candidates:
@@ -169,7 +167,7 @@ def list_files(path: str):
                     "is_dir": is_dir,
                     "size": 0 if is_dir else os.path.getsize(f_path)
                 })
-        # Sort directories first, then alphabetically
+        # 优先排列目录，然后按字母顺序排列
         items.sort(key=lambda x: (not x["is_dir"], x["name"].lower()))
         return {"files": items}
     except Exception as e:
@@ -200,7 +198,7 @@ async def run_calculation(config: ConfigRequest):
 
         else:
             
-            # Default main calculation flow
+            # 默认的主计算流程
             async for event in tasks.run_main_calculation_gen(
                 config.city, 
                 config.cycle, 

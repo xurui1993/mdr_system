@@ -11,7 +11,7 @@ export function RightPanel({ theme, activeTab, config, isRunning }: { theme: The
     if (!targetPath) return;
     setLoading(true);
     try {
-      const resp = await fetch(`http://127.0.0.1:8000/api/files?path=${encodeURIComponent(targetPath)}`);
+      const resp = await fetch(`/api/files?path=${encodeURIComponent(targetPath)}`);
       const data = await resp.json();
       setFiles(data.files || []);
       setCurrentPath(targetPath);
@@ -32,7 +32,7 @@ export function RightPanel({ theme, activeTab, config, isRunning }: { theme: The
       fetchFiles(item.path);
     } else {
       // open file logic
-      fetch(`http://127.0.0.1:8000/api/open/explorer?path=${encodeURIComponent(item.path)}`);
+      fetch(`/api/open/explorer?path=${encodeURIComponent(item.path)}`);
     }
   };
 
