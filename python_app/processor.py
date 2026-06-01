@@ -119,10 +119,10 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
         df_apply.iloc[:, 3] = pd.to_datetime(df_apply.iloc[:, 3])
         df_apply.iloc[:, 4] = pd.to_datetime(df_apply.iloc[:, 4])
 
-        for _, row in df_apply.iterrows():
+        for row in df_apply.itertuples(index=False):
             try:
-                rider_id = str(row.iloc[1]).replace('.0', '').strip()
-                date_range = pd.date_range(row.iloc[3], row.iloc[4])
+                rider_id = str(row[1]).replace('.0', '').strip()
+                date_range = pd.date_range(row[3], row[4])
                 for d in date_range: valid_riders_dates.add(f"{rider_id}|{d.strftime('%Y-%m-%d')}")
             except:
                 continue
@@ -243,14 +243,24 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                 df_source = pd.read_excel(file_path, dtype=str)
 
             for col in df_source.columns: 
-                df_source[col] = df_source[col].apply(lambda x: str(x).strip(' ="\t\r\n') if pd.notna(x) else "")
+                df_source[col] = df_source[col].fillna("").astype(str).str.strip(' ="\t\r\n')
+                # Try to cast column back to numeric if possible (ignoring empty strings)
+                try:
+                    s_replaced = df_source[col].copy()
+                    s_replaced.replace("", np.nan, inplace=True)
+                    s_num = pd.to_numeric(s_replaced)
+                    # If conversion is successful without forcing valid strings to NaN (unless they were empty)
+                    if not s_num.isna().any() or s_replaced.isna().equals(s_num.isna()):
+                        df_source[col] = s_num
+                except Exception:
+                    pass
 
             if "兼职价格档案" in wb_name:
                 try:
                     if not file_path.lower().endswith('.csv'):
                         df_price = pd.read_excel(file_path, sheet_name="兼职价格档案明细", dtype=str)
                         for col in df_price.columns:
-                            df_price[col] = df_price[col].apply(lambda x: str(x).strip(' ="\t\r\n') if pd.notna(x) else "")
+                            df_price[col] = df_price[col].fillna("").astype(str).str.strip(' ="\t\r\n')
                     else:
                         df_price = df_source.copy()
                 except Exception as e:
@@ -265,14 +275,14 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                 if rider_id_idx is None: rider_id_idx = 2
                 if rider_name_idx is None: rider_name_idx = 3
 
-                for _, r in df_price.iterrows():
+                for r in df_price.itertuples(index=False):
                     try:
                         if len(r) > 8:
-                            date_val = _norm_date(r.iloc[1])
-                            station_val = str(r.iloc[5]).strip()
-                            price_val = str(r.iloc[8]).strip()
-                            r_id = str(r.iloc[rider_id_idx]).replace('.0', '').strip() if rider_id_idx < len(r) else ""
-                            r_name = str(r.iloc[rider_name_idx]).strip() if rider_name_idx < len(r) else ""
+                            date_val = _norm_date(r[1])
+                            station_val = str(r[5]).strip()
+                            price_val = str(r[8]).strip()
+                            r_id = str(r[rider_id_idx]).replace('.0', '').strip() if rider_id_idx < len(r) else ""
+                            r_name = str(r[rider_name_idx]).strip() if rider_name_idx < len(r) else ""
                             if r_id: price_mapping_id[f"{date_val}_{station_val}_{r_id}"] = price_val
                             if r_name: price_mapping_name[f"{date_val}_{station_val}_{r_name}"] = price_val
                     except Exception:
@@ -351,11 +361,12 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                     stats_info["orders"] += len(df_source)
                     if not df_dups.empty:
                         dup_sources = {}
-                        for idx, row in df_dups.iterrows():
+                        for row in df_dups.itertuples(index=False):
                             wb_val = clean_wb_str(row[wb_col_name])
                             src_file = existing_waybills["配送单"].get(wb_val)
                             if src_file:
-                                r_id, r_name = get_id_name(row)
+                                r_id = str(row[2]).replace('.0', '').strip() if len(row) > 2 else ""
+                                r_name = str(row[3]).strip() if len(row) > 3 else ""
                                 intercept_records.append((src_file, "配送费", wb_val, r_id, r_name))
                                 dup_sources[src_file] = dup_sources.get(src_file, 0) + 1
                         for src_file, count in dup_sources.items(): log(
@@ -414,7 +425,7 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                     df_sht2.iloc[:, 1] = df_sht2.iloc[:, 1].replace(r'^\s*$', np.nan, regex=True).replace("nan", np.nan).replace("None", np.nan)
                     df_sht2.iloc[:, 1] = df_sht2.iloc[:, 1].replace("", np.nan)
                 df_sht2.dropna(subset=[df_sht2.columns[1]], inplace=True)
-                df_sht2.drop_duplicates(subset=[df_sht2.columns[1]], keep='first', inplace=True)
+                df_sht2.drop_duplicates(subset=[df_sht2.columns[0], df_sht2.columns[1]], keep='first', inplace=True)
                 df_sht2.sort_values(by=df_sht2.columns[0], ascending=True, inplace=True)
                 df_sht2.reset_index(drop=True, inplace=True)
                 df_sht2.fillna("", inplace=True)
@@ -434,16 +445,19 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                 if last_row_sht2 > 2:
                     from openpyxl.formula.translate import Translator
                     import copy
+                    translator_cache_sht2 = {}
                     for col_idx in range(4, ws_sht2.max_column + 1):
                         cell_template = ws_sht2.cell(row=2, column=col_idx)
                         if cell_template.value and isinstance(cell_template.value,
                                                               str) and cell_template.value.startswith('='):
+                            clean_f = cell_template.value
+                            if clean_f not in translator_cache_sht2:
+                                translator_cache_sht2[clean_f] = Translator(clean_f, origin=cell_template.coordinate)
+                            translator = translator_cache_sht2[clean_f]
                             for row_idx in range(3, last_row_sht2 + 1):
                                 target_cell = ws_sht2.cell(row=row_idx, column=col_idx)
                                 try:
-                                    translated_f = Translator(cell_template.value,
-                                                              origin=cell_template.coordinate).translate_formula(
-                                        target_cell.coordinate)
+                                    translated_f = translator.translate_formula(target_cell.coordinate)
                                     target_cell.value = translated_f
                                 except Exception:
                                     target_cell.value = cell_template.value
@@ -477,6 +491,7 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                             'col_letter': get_column_letter(c_idx)
                         })
 
+                    translator_cache_sht1 = {}
                     for i in range(num_riders):
                         t_row = i + 4
                         for c_idx, t_item in enumerate(template_row_info, 1):
@@ -494,10 +509,12 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                                 formula_val = t_item['val']
                                 if isinstance(formula_val, str) and formula_val.startswith('='):
                                     clean_f = formula_val.replace("{", "").replace("}", "").strip()
-                                    origin_coord = t_item['col_letter'] + "4"
+                                    if clean_f not in translator_cache_sht1:
+                                        origin_coord = t_item['col_letter'] + "4"
+                                        translator_cache_sht1[clean_f] = Translator(clean_f, origin=origin_coord)
+                                    translator = translator_cache_sht1[clean_f]
                                     try:
-                                        translated_f = Translator(clean_f, origin=origin_coord).translate_formula(
-                                            target_cell.coordinate)
+                                        translated_f = translator.translate_formula(target_cell.coordinate)
                                         if (c_idx == 1 or c_idx == 20) and ArrayFormula:
                                             target_cell.value = ArrayFormula(target_cell.coordinate, translated_f)
                                         else:
@@ -629,14 +646,15 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
 
                 if not df_dups.empty:
                     dup_sources = {}
-                    for idx, row in df_dups.iterrows():
-                        col0_val = str(row.iloc[0]).strip()
-                        wb_val = clean_wb_str(row.iloc[2])
+                    for row in df_dups.itertuples(index=False):
+                        col0_val = str(row[0]).strip() if len(row) > 0 else ""
+                        wb_val = clean_wb_str(row[2]) if len(row) > 2 else ""
                         key = f"{col0_val}_{wb_val}"
                         src_file = existing_waybills["问题单"].get(key)
                         if src_file:
                             val_type = col0_val if col0_val else "未知问题"
-                            r_id, r_name = get_id_name(row)
+                            r_id = str(row[2]).replace('.0', '').strip() if len(row) > 2 else ""
+                            r_name = str(row[3]).strip() if len(row) > 3 else ""
                             intercept_records.append((src_file, val_type, wb_val, r_id, r_name))
                             dup_sources[src_file] = dup_sources.get(src_file, 0) + 1
                     for src_file, count in dup_sources.items(): log(
@@ -870,10 +888,13 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                                 s_col = col_name
 
                         if t_col is not None and i_col is not None and s_col is not None:
-                            for _, r in df_hist.iterrows():
-                                t_val = str(r[t_col]).replace('nan', '').strip()
-                                i_val = str(r[i_col]).replace('.0', '').replace('nan', '').strip()
-                                s_val = str(r[s_col]).replace('.0', '').replace('nan', '').strip()
+                            t_col_idx = df_hist.columns.get_loc(t_col)
+                            i_col_idx = df_hist.columns.get_loc(i_col)
+                            s_col_idx = df_hist.columns.get_loc(s_col)
+                            for row in df_hist.itertuples(index=False):
+                                t_val = str(row[t_col_idx]).replace('nan', '').strip()
+                                i_val = str(row[i_col_idx]).replace('.0', '').replace('nan', '').strip()
+                                s_val = str(row[s_col_idx]).replace('.0', '').replace('nan', '').strip()
                                 if (t_val or i_val) and s_val and s_val != "None":
                                     key = f"{t_val}_{i_val}"
                                     if key not in history_scheme_map: history_scheme_map[key] = set()
@@ -901,9 +922,9 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
 
                 noprice_lookup = {f"{k[0]}_{k[1]}": format_dates_streak(v) + "无单价" for k, v in grouped.items()}
 
-                for r_idx in range(4, ws_income_target.max_row + 1):
-                    team_val = str(ws_income_target.cell(row=r_idx, column=2).value or "").strip()
-                    id_val = str(ws_income_target.cell(row=r_idx, column=3).value or "").replace('.0', '').strip()
+                for row in ws_income_target.iter_rows(min_row=4):
+                    team_val = str(row[1].value or "").strip()
+                    id_val = str(row[2].value or "").replace('.0', '').strip()
 
                     if team_val or id_val:
                         lookup_key = f"{team_val}_{id_val}"
@@ -928,22 +949,21 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                                     final_leishen_price = to_numeric_if_possible(prices_list[0])
                                 else:
                                     final_leishen_price = ";".join(prices_list)
-                                ws_income_target.cell(row=r_idx, column=leishen_price_col_idx,
-                                                      value=final_leishen_price)
+                                row[leishen_price_col_idx - 1].value = final_leishen_price
 
                         if remark_col_idx != -1:
                             if remark_parts:
-                                ws_income_target.cell(row=r_idx, column=remark_col_idx, value="；".join(remark_parts))
+                                row[remark_col_idx - 1].value = "；".join(remark_parts)
                             else:
-                                ws_income_target.cell(row=r_idx, column=remark_col_idx, value="")  # 确保清空旧备注
+                                row[remark_col_idx - 1].value = ""  # 确保清空旧备注
 
                         if last_price_col_idx != -1:
                             if lookup_key in history_scheme_map:
                                 schemes = history_scheme_map[lookup_key]
                                 scheme_str = "；".join(sorted(list(schemes)))
-                                ws_income_target.cell(row=r_idx, column=last_price_col_idx, value=scheme_str)
+                                row[last_price_col_idx - 1].value = scheme_str
                             else:
-                                ws_income_target.cell(row=r_idx, column=last_price_col_idx, value="无")
+                                row[last_price_col_idx - 1].value = "无"
 
                 if remark_col_idx != -1:
                     max_length = 0
@@ -1000,63 +1020,67 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
 
             # Only set height up to 1000 to save time
             limit_r = min(max_r, 1000) if is_raw_sheet else max_r
-            for row_idx in range(1, limit_r + 1): 
-                ws.row_dimensions[row_idx].height = 19.5
+            if ws.title != "配送所得表":
+                for row_idx in range(1, limit_r + 1): 
+                    ws.row_dimensions[row_idx].height = 19.5
 
-            iter_max_r = 1 if is_raw_sheet else max_r
-            for row in ws.iter_rows(min_row=1, max_row=iter_max_r, min_col=1, max_col=max_c):
-                for cell in row:
-                    val = cell.value
-                    cell.alignment = center_align
-                    if is_intercept_sheet:
-                        cell.border = red_border
-                        cell.font = red_font_header if cell.row == 1 else red_font_strike
-                    else:
-                        cell.border = border
-                        if ws.title != "配送所得表": cell.font = font_style
-
-                    if val is None: continue
-
-                    if ws.title == "配送所得表":
-                        val_str = str(val).strip()
-                        if val_str.isdigit() and len(val_str) >= 10:
-                            cell.number_format = '0'
-                        elif isinstance(val, (int, float)) and val > 1000000000:
-                            cell.number_format = '0'
+            if ws.title == "配送所得表":
+                iter_max_r = 0 # Skip slow cell loop for income target sheet
+            elif is_raw_sheet:
+                iter_max_r = limit_r
+            else:
+                iter_max_r = max_r
+                
+            if iter_max_r > 0:
+                for row in ws.iter_rows(min_row=1, max_row=iter_max_r, min_col=1, max_col=max_c):
+                    for cell in row:
+                        val = cell.value
+                        cell.alignment = center_align
+                        if is_intercept_sheet:
+                            cell.border = red_border
+                            cell.font = red_font_header if cell.row == 1 else red_font_strike
                         else:
-                            cell.number_format = 'General'
-                        continue
-
-                    val_type = type(val)
-                    if val_type is str:
-                        val_str = val.strip()
-                        if val_str.isdigit():
-                            if len(val_str) < 15:
-                                cell.value = int(val_str)
-                                cell.number_format = '0'
-                            else:
+                            cell.border = border
+                            if ws.title not in ["配送所得表", "安全基金"]:
+                                cell.font = font_style
+    
+                        if val is None: continue
+    
+                        val_type = type(val)
+                        if val_type is str:
+                            val_str = val.strip()
+                            if val_str.isdigit():
+                                if len(val_str) < 15:
+                                    cell.value = int(val_str)
+                                    cell.number_format = '0'
+                                else:
+                                    cell.number_format = '@'
+                            elif len(val_str) >= 15:
                                 cell.number_format = '@'
-                        elif len(val_str) >= 15:
-                            cell.number_format = '@'
-                    elif val_type is float:
-                        if cell.number_format not in ['yyyy/mm/dd', 'yyyy/m/d', 'm/d/yy',
-                                                      '@']: cell.number_format = '0.00'
-                    elif val_type is int:
-                        if cell.number_format not in ['yyyy/mm/dd', 'yyyy/m/d', 'm/d/yy', '@']: cell.number_format = '0'
+                        elif val_type is float:
+                            if cell.number_format not in ['yyyy/mm/dd', 'yyyy/m/d', 'm/d/yy', '@']:
+                                if val.is_integer():
+                                    cell.number_format = '0'
+                                else:
+                                    cell.number_format = '0.00'
+                        elif val_type is int:
+                            if cell.number_format not in ['yyyy/mm/dd', 'yyyy/m/d', 'm/d/yy', '@']: cell.number_format = '0'
 
             if ws.title != "配送所得表":
-                for col_idx in range(1, max_c + 1):
-                    col_letter = get_column_letter(col_idx)
-                    max_length = 0
-                    for row_val in ws.iter_rows(min_row=1, max_row=min(1000, max_r), min_col=col_idx, max_col=col_idx,
-                                                values_only=True):
-                        val = row_val[0]
+                max_lengths = [0] * max_c
+                for row_val in ws.iter_rows(min_row=1, max_row=min(1000, max_r), min_col=1, max_col=max_c, values_only=True):
+                    for idx, val in enumerate(row_val):
                         if val is not None:
                             val_str = str(val)
                             if not val_str.startswith('='):
                                 val_len = len(val_str.encode('gbk', errors='ignore'))
-                                if val_len > max_length: max_length = val_len
+                                if val_len > max_lengths[idx]: 
+                                    max_lengths[idx] = val_len
+                
+                for col_idx, max_length in enumerate(max_lengths, 1):
+                    col_letter = get_column_letter(col_idx)
                     ws.column_dimensions[col_letter].width = max(11, min(max_length + 3.5, 55))
+                    
                 for cell in ws[1]:
                     if cell.value is not None: cell.fill = red_fill if is_intercept_sheet else fill_style
 
@@ -1163,11 +1187,8 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
         write_row = 1
         headers_special2 = ["团队名称", "骑手ID", "骑手姓名", "绑定情况"]
         for c_idx, val in enumerate(headers_special2, 1): ws_special_2.cell(row=write_row, column=c_idx, value=val)
-        write_row += 1
-
         for rec in unbound_records:
-            for c_idx, val in enumerate(rec, 1): ws_special_2.cell(row=write_row, column=c_idx, value=val)
-            write_row += 1
+            ws_special_2.append(rec)
 
         border_style = Side(border_style="thin", color="000000")
         border = Border(left=border_style, right=border_style, top=border_style, bottom=border_style)
