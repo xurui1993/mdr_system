@@ -353,19 +353,13 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                             pass
 
                 headers_sht0 = list(df_source.columns)
-                if ws_sht0.max_row <= 1:
-                    ws_sht0.append(headers_sht0)
+                for c_idx, val in enumerate(headers_sht0, 1): ws_sht0.cell(row=1, column=c_idx, value=val)
+                for r_idx, row_data in enumerate(df_source.itertuples(index=False), 2):
+                    for c_idx, val in enumerate(row_data, 1): ws_sht0.cell(row=r_idx, column=c_idx, value=val)
                 
                 last_col = 17 if selected_option == "全职" else 16
                 headers = ["运单状态", "是否周末", "是否欺诈单"]
-                
-                # Append rows directly
-                for row_data in df_source.itertuples(index=False):
-                    ws_sht0.append(row_data)
-
-                # Set extra headers explicitly
-                for i, h in enumerate(headers): 
-                    ws_sht0.cell(row=1, column=last_col + i, value=h)
+                for i, h in enumerate(headers): ws_sht0.cell(row=1, column=last_col + i, value=h)
 
                 if len(df_source) > 0:
                     df_sht2 = df_source.iloc[:, 1:4].copy()
@@ -399,6 +393,8 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                 df_sht2.replace(r'^\s*$', np.nan, regex=True, inplace=True)
                 if len(df_sht2.columns) > 1:
                     df_sht2.iloc[:, 1] = df_sht2.iloc[:, 1].astype(str).str.replace('.0', '', regex=False).str.strip()
+                    df_sht2.iloc[:, 1] = df_sht2.iloc[:, 1].replace(r'^\s*$', np.nan, regex=True).replace("nan", np.nan).replace("None", np.nan)
+                    df_sht2.iloc[:, 1] = df_sht2.iloc[:, 1].replace("", np.nan)
                 df_sht2.dropna(subset=[df_sht2.columns[1]], inplace=True)
                 df_sht2.drop_duplicates(subset=[df_sht2.columns[1]], keep='first', inplace=True)
                 df_sht2.sort_values(by=df_sht2.columns[0], ascending=True, inplace=True)
@@ -408,10 +404,9 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                 data_list = df_sht2.values.tolist()
                 headers_sht2 = df_sht2.columns.tolist() if len(df_sht2.columns) >= 3 else ["团队名称", "骑手ID", "骑手姓名"]
 
-                if ws_sht2.max_row <= 1:
-                    ws_sht2.append(headers_sht2)
-                for row_data in data_list:
-                    ws_sht2.append(row_data)
+                for c_idx, val in enumerate(headers_sht2, 1): ws_sht2.cell(row=1, column=c_idx, value=val)
+                for r_idx, row_data in enumerate(data_list, 2):
+                    for c_idx, val in enumerate(row_data, 1): ws_sht2.cell(row=r_idx, column=c_idx, value=val)
 
                 last_row_sht2 = len(data_list) + 1
                 num_riders = last_row_sht2 - 1
@@ -523,9 +518,12 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                     if "欺诈单" in str(row[6]): row[12], row[13], row[14] = "是", "欺诈单不考核", 0
 
                 ws_wg = wb1["违规索赔"]
+                start_row = 1
+                while ws_wg.cell(row=start_row, column=1).value is not None: start_row += 1
 
-                if ws_wg.max_row <= 1:
-                    ws_wg.append(headers)
+                if start_row == 1:
+                    for c_idx, h_val in enumerate(headers, 1): ws_wg.cell(row=start_row, column=c_idx, value=h_val)
+                    start_row += 1
 
                 added_penalty_count = 0
                 wb_idx = next((i for i, c in enumerate(headers) if any(kw in str(c) for kw in ["运单", "订单", "单号"])), 10)
@@ -550,13 +548,15 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                             intercept_records.append((src_file, "索赔扣款", wb_val, r_id, r_name))
                             dup_sources[src_file] = dup_sources.get(src_file, 0) + 1
                         else:
-                            ws_wg.append(row)
+                            for c_idx, val in enumerate(row, 1): ws_wg.cell(row=start_row, column=c_idx, value=val)
+                            start_row += 1
                             added_penalty_count += 1
                     for src_file, count in dup_sources.items(): log(
                         f"💥 [红牌拦截] 发现 {count} 条【违规索赔】重复记录！(源自历史文件: {src_file})", "ERROR")
                 else:
                     for row in data_arr:
-                        ws_wg.append(row)
+                        for c_idx, val in enumerate(row, 1): ws_wg.cell(row=start_row, column=c_idx, value=val)
+                        start_row += 1
                         added_penalty_count += 1
 
                 stats_info["penalty_orders"] += added_penalty_count
@@ -625,10 +625,9 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                         f"💥 [红牌拦截] 发现 {count} 条【问题单】重复记录！(源自历史文件: {src_file})", "ERROR")
 
                 headers_wtd = list(df_source.columns)
-                if ws_wtd.max_row <= 1:
-                    ws_wtd.append(headers_wtd)
-                for row_data in df_source.itertuples(index=False):
-                    ws_wtd.append(row_data)
+                for c_idx, val in enumerate(headers_wtd, 1): ws_wtd.cell(row=1, column=c_idx, value=val)
+                for r_idx, row_data in enumerate(df_source.itertuples(index=False), 2):
+                    for c_idx, val in enumerate(row_data, 1): ws_wtd.cell(row=r_idx, column=c_idx, value=val)
 
             elif "支付绑定" in wb_name:
                 try:
@@ -662,9 +661,9 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                 ws_bind.delete_rows(1, ws_bind.max_row)
 
                 headers_bind = list(df_source_filtered.columns)
-                ws_bind.append(headers_bind)
-                for row_data in df_source_filtered.itertuples(index=False):
-                    ws_bind.append(row_data)
+                for c_idx, val in enumerate(headers_bind, 1): ws_bind.cell(row=1, column=c_idx, value=val)
+                for r_idx, row_data in enumerate(df_source_filtered.itertuples(index=False), 2):
+                    for c_idx, val in enumerate(row_data, 1): ws_bind.cell(row=r_idx, column=c_idx, value=val)
 
             log(random.choice(theme['msg_success']).format(wb_name=wb_name))
             processed_count += 1
@@ -977,15 +976,23 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
             max_r = ws.max_row
             max_c = ws.max_column
             is_intercept_sheet = (ws.title == "拦截溯源")
-
+            is_raw_sheet = ws.title in ["配送单", "日单量", "骑手支付绑定", "申请名单", "安全基金"]
+            
             if ws.title == "申请名单":
                 ws.freeze_panes = 'A2'
             elif ws.title != "配送所得表":
                 ws.freeze_panes = 'A2'
 
-            for row_idx in range(1, max_r + 1): ws.row_dimensions[row_idx].height = 19.5
+            # Only set height up to 1000 to save time
+            limit_r = min(max_r, 1000) if is_raw_sheet else max_r
+            for row_idx in range(1, limit_r + 1): 
+                ws.row_dimensions[row_idx].height = 19.5
 
             for row in ws.iter_rows(min_row=1, max_row=max_r, min_col=1, max_col=max_c):
+                 # Skip formatting body cells for massive raw sheets to save time
+                if is_raw_sheet and row[0].row > 1:
+                    continue
+                    
                 for cell in row:
                     val = cell.value
                     cell.alignment = center_align
