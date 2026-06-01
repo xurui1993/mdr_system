@@ -1,0 +1,8 @@
+customtkinter
+pandas
+openpyxl
+numpy
+requests
+zhdate
+urllib3
+pywin32
