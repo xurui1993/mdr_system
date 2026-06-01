@@ -186,11 +186,12 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
         ws_apply = wb1["申请名单"]
 
         headers_apply = list(df_apply.columns)
-        for c_idx, val in enumerate(headers_apply, 1): ws_apply.cell(row=1, column=c_idx, value=val)
+        ws_apply.delete_rows(1, ws_apply.max_row)
+        ws_apply.append(headers_apply)
         for r_idx, row in enumerate(df_apply.itertuples(index=False), 2):
-            for c_idx, value in enumerate(row, 1):
-                cell = ws_apply.cell(row=r_idx, column=c_idx, value=value)
-                if c_idx in [4, 5]: cell.number_format = 'yyyy/mm/dd'
+            ws_apply.append(list(row))
+            for c_idx in [4, 5]:
+                if c_idx <= len(row): ws_apply.cell(row=r_idx, column=c_idx).number_format = 'yyyy/mm/dd'
 
         progress_callback(0.25, "基础模板就绪")
 
@@ -353,9 +354,10 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                             pass
 
                 headers_sht0 = list(df_source.columns)
-                for c_idx, val in enumerate(headers_sht0, 1): ws_sht0.cell(row=1, column=c_idx, value=val)
-                for r_idx, row_data in enumerate(df_source.itertuples(index=False), 2):
-                    for c_idx, val in enumerate(row_data, 1): ws_sht0.cell(row=r_idx, column=c_idx, value=val)
+                ws_sht0.delete_rows(1, ws_sht0.max_row)
+                ws_sht0.append(headers_sht0)
+                for row_data in df_source.itertuples(index=False):
+                    ws_sht0.append(list(row_data))
                 
                 last_col = 17 if selected_option == "全职" else 16
                 headers = ["运单状态", "是否周末", "是否欺诈单"]
@@ -625,9 +627,10 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                         f"💥 [红牌拦截] 发现 {count} 条【问题单】重复记录！(源自历史文件: {src_file})", "ERROR")
 
                 headers_wtd = list(df_source.columns)
-                for c_idx, val in enumerate(headers_wtd, 1): ws_wtd.cell(row=1, column=c_idx, value=val)
-                for r_idx, row_data in enumerate(df_source.itertuples(index=False), 2):
-                    for c_idx, val in enumerate(row_data, 1): ws_wtd.cell(row=r_idx, column=c_idx, value=val)
+                ws_wtd.delete_rows(1, ws_wtd.max_row)
+                ws_wtd.append(headers_wtd)
+                for row_data in df_source.itertuples(index=False):
+                    ws_wtd.append(list(row_data))
 
             elif "支付绑定" in wb_name:
                 try:
@@ -661,9 +664,9 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                 ws_bind.delete_rows(1, ws_bind.max_row)
 
                 headers_bind = list(df_source_filtered.columns)
-                for c_idx, val in enumerate(headers_bind, 1): ws_bind.cell(row=1, column=c_idx, value=val)
-                for r_idx, row_data in enumerate(df_source_filtered.itertuples(index=False), 2):
-                    for c_idx, val in enumerate(row_data, 1): ws_bind.cell(row=r_idx, column=c_idx, value=val)
+                ws_bind.append(headers_bind)
+                for row_data in df_source_filtered.itertuples(index=False):
+                    ws_bind.append(list(row_data))
 
             log(random.choice(theme['msg_success']).format(wb_name=wb_name))
             processed_count += 1
@@ -976,7 +979,7 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
             max_r = ws.max_row
             max_c = ws.max_column
             is_intercept_sheet = (ws.title == "拦截溯源")
-            is_raw_sheet = ws.title in ["配送单", "日单量", "骑手支付绑定", "申请名单", "安全基金"]
+            is_raw_sheet = ws.title not in ["配送所得表", "拦截溯源"]
             
             if ws.title == "申请名单":
                 ws.freeze_panes = 'A2'
@@ -988,11 +991,8 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
             for row_idx in range(1, limit_r + 1): 
                 ws.row_dimensions[row_idx].height = 19.5
 
-            for row in ws.iter_rows(min_row=1, max_row=max_r, min_col=1, max_col=max_c):
-                 # Skip formatting body cells for massive raw sheets to save time
-                if is_raw_sheet and row[0].row > 1:
-                    continue
-                    
+            iter_max_r = 1 if is_raw_sheet else max_r
+            for row in ws.iter_rows(min_row=1, max_row=iter_max_r, min_col=1, max_col=max_c):
                 for cell in row:
                     val = cell.value
                     cell.alignment = center_align
