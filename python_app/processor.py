@@ -183,10 +183,26 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
 
         log(f"开始疯狂填表: {os.path.basename(template_path)}", "SYSTEM")
         wb1 = openpyxl.load_workbook(template_path)
-        ws_apply = wb1["申请名单"]
+        
+        def fast_recreate_sheet(wb, sheet_name):
+            if sheet_name in wb.sheetnames:
+                idx = wb.sheetnames.index(sheet_name)
+                old_ws = wb[sheet_name]
+                tab_color = old_ws.sheet_properties.tabColor
+                del wb[sheet_name]
+                new_ws = wb.create_sheet(title=sheet_name, index=idx)
+                if tab_color:
+                    try:
+                        new_ws.sheet_properties.tabColor = copy.copy(tab_color)
+                    except:
+                        pass
+                return new_ws
+            return wb.create_sheet(title=sheet_name)
+            
+        import copy
+        ws_apply = fast_recreate_sheet(wb1, "申请名单")
 
         headers_apply = list(df_apply.columns)
-        ws_apply.delete_rows(1, ws_apply.max_row)
         ws_apply.append(headers_apply)
         for r_idx, row in enumerate(df_apply.itertuples(index=False), 2):
             ws_apply.append(list(row))
@@ -226,15 +242,15 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
             else:
                 df_source = pd.read_excel(file_path, dtype=str)
 
-            for col in df_source.columns: df_source[col] = df_source[col].astype(str).str.replace(
-                r'^[="\s\t]+|[="\s\t]+$', '', regex=True)
+            for col in df_source.columns: 
+                df_source[col] = df_source[col].apply(lambda x: str(x).strip(' ="\t\r\n') if pd.notna(x) else "")
 
             if "兼职价格档案" in wb_name:
                 try:
                     if not file_path.lower().endswith('.csv'):
                         df_price = pd.read_excel(file_path, sheet_name="兼职价格档案明细", dtype=str)
-                        for col in df_price.columns: df_price[col] = df_price[col].astype(str).str.replace(
-                            r'^[="\s\t]+|[="\s\t]+$', '', regex=True)
+                        for col in df_price.columns:
+                            df_price[col] = df_price[col].apply(lambda x: str(x).strip(' ="\t\r\n') if pd.notna(x) else "")
                     else:
                         df_price = df_source.copy()
                 except Exception as e:
@@ -354,10 +370,10 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                             pass
 
                 headers_sht0 = list(df_source.columns)
-                ws_sht0.delete_rows(1, ws_sht0.max_row)
+                ws_sht0 = fast_recreate_sheet(wb1, "配送单")
                 ws_sht0.append(headers_sht0)
-                for row_data in df_source.itertuples(index=False):
-                    ws_sht0.append(list(row_data))
+                for row_data in df_source.values.tolist():
+                    ws_sht0.append(row_data)
                 
                 last_col = 17 if selected_option == "全职" else 16
                 headers = ["运单状态", "是否周末", "是否欺诈单"]
@@ -627,10 +643,10 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                         f"💥 [红牌拦截] 发现 {count} 条【问题单】重复记录！(源自历史文件: {src_file})", "ERROR")
 
                 headers_wtd = list(df_source.columns)
-                ws_wtd.delete_rows(1, ws_wtd.max_row)
+                ws_wtd = fast_recreate_sheet(wb1, "问题单")
                 ws_wtd.append(headers_wtd)
-                for row_data in df_source.itertuples(index=False):
-                    ws_wtd.append(list(row_data))
+                for row_data in df_source.values.tolist():
+                    ws_wtd.append(row_data)
 
             elif "支付绑定" in wb_name:
                 try:
@@ -660,13 +676,12 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                 else:
                     df_source_filtered = df_bind_status
 
-                ws_bind = wb1["骑手支付绑定"]
-                ws_bind.delete_rows(1, ws_bind.max_row)
+                ws_bind = fast_recreate_sheet(wb1, "骑手支付绑定")
 
                 headers_bind = list(df_source_filtered.columns)
                 ws_bind.append(headers_bind)
-                for row_data in df_source_filtered.itertuples(index=False):
-                    ws_bind.append(list(row_data))
+                for row_data in df_source_filtered.values.tolist():
+                    ws_bind.append(row_data)
 
             log(random.choice(theme['msg_success']).format(wb_name=wb_name))
             processed_count += 1
@@ -724,8 +739,7 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
         sorted_keys = sorted(daily_summary.keys(), key=lambda x: (str(x[0]), str(x[2])))
 
         if "日单量" in wb1.sheetnames:
-            ws_daily = wb1["日单量"]
-            ws_daily.delete_rows(1, ws_daily.max_row)
+            ws_daily = fast_recreate_sheet(wb1, "日单量")
         else:
             target_idx_daily = wb1.sheetnames.index("配送所得表") + 1 if "配送所得表" in wb1.sheetnames else 2
             ws_daily = wb1.create_sheet(title="日单量", index=target_idx_daily)
@@ -808,16 +822,14 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
         if no_price_records:
             log(f">>> 🚨 发现无单价数据，正在汇总并装进【蓝橙无单价明细】子表！", "WARN")
             if "蓝橙无单价明细" in wb1.sheetnames:
-                ws_noprice = wb1["蓝橙无单价明细"]
-                ws_noprice.delete_rows(1, ws_noprice.max_row)
+                ws_noprice = fast_recreate_sheet(wb1, "蓝橙无单价明细")
                 current_idx = wb1.index(ws_noprice)
                 if current_idx != 0: wb1.move_sheet(ws_noprice, offset=-current_idx)
             else:
                 ws_noprice = wb1.create_sheet(title="蓝橙无单价明细", index=0)
 
             if "蓝橙无单价" in wb1.sheetnames:
-                ws_old = wb1["蓝橙无单价"]
-                ws_old.delete_rows(1, ws_old.max_row)
+                ws_old = fast_recreate_sheet(wb1, "蓝橙无单价")
                 ws_old.sheet_state = 'hidden'
 
             ws_noprice.sheet_properties.tabColor = "FF9900"
