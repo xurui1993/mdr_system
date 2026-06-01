@@ -12,16 +12,22 @@ async function startServer() {
   // We'll spawn it regardless for simplicity here, assuming it handles port 8000
   console.log("Starting Python backend...");
   
-  const pipProcess = spawn("pip3", ["install", "-r", "requirements.txt", "--break-system-packages"], {
+  const isWin = process.platform === "win32";
+  const pipCmd = isWin ? "pip" : "pip3";
+  const pythonCmd = isWin ? "python" : "python3";
+  
+  const pipProcess = spawn(pipCmd, ["install", "-r", "requirements.txt", "--break-system-packages"], {
     cwd: path.join(process.cwd(), "backend"),
-    stdio: "inherit"
+    stdio: "inherit",
+    shell: isWin
   });
 
   pipProcess.on("close", (code) => {
-    console.log(`pip3 install exited with code ${code}`);
-    const pythonProcess = spawn("python3", ["-m", "uvicorn", "main:app", "--port", "8000"], {
+    console.log(`${pipCmd} install exited with code ${code}`);
+    const pythonProcess = spawn(pythonCmd, ["-m", "uvicorn", "main:app", "--port", "8000"], {
       cwd: path.join(process.cwd(), "backend"),
-      stdio: "inherit"
+      stdio: "inherit",
+      shell: isWin
     });
 
     pythonProcess.on("close", (code) => {
