@@ -377,20 +377,27 @@ export default function App() {
 
       const reader = response.body.getReader();
       const decoder = new TextDecoder('utf-8');
+      let buffer = '';
 
       while (true) {
         const { done, value } = await reader.read();
-        if (done) break;
+        if (done) {
+            setIsRunning(false);
+            break;
+        }
         
-        const chunk = decoder.decode(value, { stream: true });
-        const lines = chunk.split('\n');
+        buffer += decoder.decode(value, { stream: true });
+        const events = buffer.split('\n\n');
+        buffer = events.pop() || '';
         
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            try {
-              const payload = line.substring(6).trim();
-              if (!payload) continue;
-              const data = JSON.parse(payload);
+        for (const event of events) {
+          const lines = event.split('\n');
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              try {
+                const payload = line.substring(6).trim();
+                if (!payload) continue;
+                const data = JSON.parse(payload);
               
               if (data.type === 'log') {
                 appendLog(data.msg, data.level);
@@ -410,6 +417,7 @@ export default function App() {
             }
           }
         }
+      }
       }
     } catch(err) {
       appendLog(`[ERROR] 本地后端服务未响应，请确保通过 node server.ts 正常启动！: ${String(err)}`, 'ERROR');
@@ -481,20 +489,27 @@ export default function App() {
 
       const reader = response.body.getReader();
       const decoder = new TextDecoder('utf-8');
+      let buffer = '';
 
       while (true) {
         const { done, value } = await reader.read();
-        if (done) break;
+        if (done) {
+            setIsRunning(false);
+            break;
+        }
         
-        const chunk = decoder.decode(value, { stream: true });
-        const lines = chunk.split('\n');
+        buffer += decoder.decode(value, { stream: true });
+        const events = buffer.split('\n\n');
+        buffer = events.pop() || '';
         
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            try {
-              const payload = line.substring(6).trim();
-              if (!payload) continue;
-              const data = JSON.parse(payload);
+        for (const event of events) {
+          const lines = event.split('\n');
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              try {
+                const payload = line.substring(6).trim();
+                if (!payload) continue;
+                const data = JSON.parse(payload);
               
               if (data.type === 'log') {
                 appendLog(data.msg, data.level);
@@ -517,6 +532,7 @@ export default function App() {
             }
           }
         }
+      }
       }
     } catch(err) {
       appendLog(`[ERROR] 本地后端服务未响应，请确保通过 node server.ts 正常启动！: ${String(err)}`, 'ERROR');

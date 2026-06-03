@@ -13,21 +13,35 @@ async function startServer() {
   console.log("Starting Python backend...");
   
   const isWin = process.platform === "win32";
-  const pipCmd = isWin ? "pip" : "pip3";
-  const pythonCmd = isWin ? "python" : "python3";
   
-  const pipProcess = spawn(pipCmd, ["install", "-r", "requirements.txt", "--break-system-packages"], {
+  const setupCmd = `
+    python3 -m ensurepip --upgrade || true
+    python3 -m pip install -r requirements.txt --break-system-packages || true
+    python3 -c "import urllib.request; urllib.request.urlretrieve('https://bootstrap.pypa.io/get-pip.py', 'get-pip.py')"
+    python3 get-pip.py --break-system-packages || true
+    python3 -m pip install -r requirements.txt --break-system-packages || true
+  `;
+  
+  const pipProcess = spawn(setupCmd, [], {
     cwd: path.join(process.cwd(), "backend"),
     stdio: "inherit",
-    shell: isWin
+    shell: true
+  });
+
+  pipProcess.on("error", (err) => {
+    console.error("Pip spawn error:", err);
   });
 
   pipProcess.on("close", (code) => {
-    console.log(`${pipCmd} install exited with code ${code}`);
-    const pythonProcess = spawn(pythonCmd, ["-m", "uvicorn", "main:app", "--port", "8000"], {
+    console.log(`Pip setup exited with code ${code}`);
+    const pythonProcess = spawn("python3 -m uvicorn main:app --port 8000 || python -m uvicorn main:app --port 8000 || true", [], {
       cwd: path.join(process.cwd(), "backend"),
       stdio: "inherit",
-      shell: isWin
+      shell: true
+    });
+
+    pythonProcess.on("error", (err) => {
+      console.error("Python spawn error:", err);
     });
 
     pythonProcess.on("close", (code) => {
