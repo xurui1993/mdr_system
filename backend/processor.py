@@ -21,6 +21,18 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
             level, "[INFO]")
         log_callback(f"{prefix} {msg}\n", level)
 
+    def find_wb_col(columns, default_idx=None):
+        for c in columns:
+            if str(c).strip() in ["运单号", "运单id", "运单ID", "单号", "包裹单号", "运单"]: return c
+        for c in columns:
+            c_str = str(c).strip()
+            if "状态" not in c_str and any(kw in c_str for kw in ["运单", "单号"]): return c
+        for c in columns:
+            c_str = str(c).strip()
+            if "状态" not in c_str and "订单" in c_str: return c
+        if default_idx is not None and default_idx < len(columns): return columns[default_idx]
+        return None
+
     def clean_wb_str(val):
         if pd.isna(val) or val is None or str(val).strip().lower() == 'nan':
             return ""
@@ -158,7 +170,7 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                             df_sht = xls.parse(sht, dtype=str)
                             headers = list(df_sht.columns)
                             if sht == "问题单":
-                                wb_idx_name = next((h for h in headers if any(kw in str(h) for kw in ["运单", "订单", "单号"])), headers[2] if len(headers) > 2 else None)
+                                wb_idx_name = find_wb_col(headers, 2)
                                 type_idx_name = headers[0] if len(headers) > 0 else None
                                 if wb_idx_name and type_idx_name:
                                     types = df_sht[type_idx_name].fillna("").astype(str).str.strip()
@@ -167,7 +179,7 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                                         if w and "nan" not in str(w).lower(): existing_waybills[sht][f"{t}_{w}"] = file_basename
                             else:
                                 fallback_idx = 10 if sht == "违规索赔" else None
-                                wb_idx_name = next((h for h in headers if any(kw in str(h) for kw in ["运单", "订单", "单号"])), headers[fallback_idx] if fallback_idx is not None and fallback_idx < len(headers) else None)
+                                wb_idx_name = find_wb_col(headers, fallback_idx)
                                 if wb_idx_name:
                                     wbs = df_sht[wb_idx_name].fillna("").astype(str).str.strip().str.replace(r"\\.?0+$", "", regex=True).str.strip("'")
                                     for w in wbs:
@@ -389,8 +401,7 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                 df_source = df_source.iloc[:, keep_cols].copy()
                 df_source = df_source[~df_source.iloc[:, 6].astype(str).str.contains("异常", na=False)]
 
-                wb_col_name = next((c for c in df_source.columns if any(kw in str(c) for kw in ["运单", "订单", "单号"])),
-                                   None)
+                wb_col_name = find_wb_col(df_source.columns)
                 if wb_col_name:
                     clean_waybills = df_source[wb_col_name].apply(clean_wb_str)
                     mask_dup = clean_waybills.isin(existing_waybills["配送单"].keys())
@@ -400,13 +411,15 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                     if not df_dups.empty:
                         dup_sources = {}
                         wb_col_idx = df_dups.columns.get_loc(wb_col_name)
+                        rid_idx = next((i for i, c in enumerate(df_dups.columns) if "骑手" in str(c) and ("id" in str(c).lower() or "编码" in str(c))), 2)
+                        rname_idx = next((i for i, c in enumerate(df_dups.columns) if "姓名" in str(c)), 3)
                         for row in df_dups.itertuples(index=False):
                             wb_val = clean_wb_str(row[wb_col_idx])
                             src_file = existing_waybills["配送单"].get(wb_val)
                             if src_file:
-                                r_id = str(row[2]).replace('.0', '').strip() if len(row) > 2 else ""
-                                r_name = str(row[3]).strip() if len(row) > 3 else ""
-                                intercept_records.append((src_file, "配送费", wb_val, r_id, r_name))
+                                r_id = str(row[rid_idx]).replace('.0', '').strip() if rid_idx < len(row) else ""
+                                r_name = str(row[rname_idx]).strip() if rname_idx < len(row) else ""
+                                intercept_records.append((src_file, "配送单", wb_val, r_id, r_name))
                                 dup_sources[src_file] = dup_sources.get(src_file, 0) + 1
                         for src_file, count in dup_sources.items(): log(
                             f"💥 [红牌拦截] 发现 {count} 条【配送单】重复记录！(源自历史文件: {src_file})", "ERROR")
@@ -601,7 +614,8 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                     ws_wg.append(headers)
 
                 added_penalty_count = 0
-                wb_idx = next((i for i, c in enumerate(headers) if any(kw in str(c) for kw in ["运单", "订单", "单号"])), 10)
+                bg_col_name = find_wb_col(headers, 10)
+                wb_idx = headers.index(bg_col_name) if bg_col_name in headers else 10
 
                 id_idx, name_idx = -1, -1
                 for i, c in enumerate(headers):
@@ -673,9 +687,13 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                 df_source.iloc[:, 12] = is_fraud_info
                 df_source.iloc[:, 11] = fast_vals
 
+                wb_col_name = find_wb_col(df_source.columns, 2)
+                wb_col_idx = df_source.columns.get_loc(wb_col_name) if wb_col_name else 2
+                
                 ws_wtd = wb1["问题单"]
-                clean_problem_waybills = df_source.iloc[:, 2].apply(clean_wb_str)
-                combined_keys = df_source.iloc[:, 0].astype(str).str.strip() + "_" + clean_problem_waybills
+                clean_problem_waybills = df_source.iloc[:, wb_col_idx].apply(clean_wb_str)
+                type_col = 0
+                combined_keys = df_source.iloc[:, type_col].astype(str).str.strip() + "_" + clean_problem_waybills
                 mask_dup = combined_keys.isin(existing_waybills["问题单"].keys())
 
                 df_dups = df_source[mask_dup].copy()
@@ -684,15 +702,17 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
 
                 if not df_dups.empty:
                     dup_sources = {}
+                    rid_idx = next((i for i, c in enumerate(df_dups.columns) if "骑手" in str(c) and ("id" in str(c).lower() or "编码" in str(c))), 2)
+                    rname_idx = next((i for i, c in enumerate(df_dups.columns) if "姓名" in str(c)), 3)
                     for row in df_dups.itertuples(index=False):
-                        col0_val = str(row[0]).strip() if len(row) > 0 else ""
-                        wb_val = clean_wb_str(row[2]) if len(row) > 2 else ""
+                        col0_val = str(row[type_col]).strip() if len(row) > type_col else ""
+                        wb_val = clean_wb_str(row[wb_col_idx]) if len(row) > wb_col_idx else ""
                         key = f"{col0_val}_{wb_val}"
                         src_file = existing_waybills["问题单"].get(key)
                         if src_file:
                             val_type = col0_val if col0_val else "未知问题"
-                            r_id = str(row[2]).replace('.0', '').strip() if len(row) > 2 else ""
-                            r_name = str(row[3]).strip() if len(row) > 3 else ""
+                            r_id = str(row[rid_idx]).replace('.0', '').strip() if rid_idx < len(row) else ""
+                            r_name = str(row[rname_idx]).strip() if rname_idx < len(row) else ""
                             intercept_records.append((src_file, val_type, wb_val, r_id, r_name))
                             dup_sources[src_file] = dup_sources.get(src_file, 0) + 1
                     for src_file, count in dup_sources.items(): log(
@@ -1084,14 +1104,10 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
 
             # 对所有表格进行全量行高编排
             if ws.title != "配送所得表":
-                if getattr(ws, 'sheet_format', None):
-                    ws.sheet_format.defaultRowHeight = 19.5
-                    ws.sheet_format.customHeight = True
+                for row_idx in range(1, max_r + 1):
+                    ws.row_dimensions[row_idx].height = 19.5
 
-            if ws.title == "配送所得表":
-                iter_max_r = 0 # 跳过所得表的慢速单元格遍历，提升效率
-            else:
-                iter_max_r = max_r
+            iter_max_r = max_r
                 
             if iter_max_r > 0:
                 for row_idx, row in enumerate(ws.iter_rows(min_row=1, max_row=iter_max_r, min_col=1, max_col=max_c), 1):
@@ -1106,23 +1122,44 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                         if is_intercept_sheet and is_header:
                             cell.font = red_font_header
 
-            if ws.title != "配送所得表":
-                max_lengths = [0] * max_c
-                for row_val in ws.iter_rows(min_row=1, max_row=min(2000, max_r), min_col=1, max_col=max_c, values_only=True):
-                    for idx, val in enumerate(row_val):
-                        if val is not None:
-                            val_str = str(val)
-                            if not val_str.startswith('='):
-                                val_len = len(val_str.encode('gbk', errors='ignore'))
-                                if val_len > max_lengths[idx]: 
-                                    max_lengths[idx] = val_len
+                        val = cell.value
+                        if val is None: continue
+
+                        if not is_header and not (is_apply_sheet and col_idx in [4, 5]):
+                            val_type = type(val)
+                            if val_type is str:
+                                val_str = val.strip()
+                                if val_str.isdigit() and len(val_str) < 15:
+                                    cell.value = int(val_str)
+                            
+                            # Re-eval since cell.value might have changed
+                            val = cell.value
+                            val_type = type(val)
+                            
+                            if val_type is float:
+                                if val.is_integer():
+                                    cell.number_format = '0'
+                                else:
+                                    cell.number_format = '0.00'
+                            elif val_type is int:
+                                cell.number_format = '0'
+
+            max_lengths = [0] * max_c
+            for row_val in ws.iter_rows(min_row=1, max_row=min(2000, max_r), min_col=1, max_col=max_c, values_only=True):
+                for idx, val in enumerate(row_val):
+                    if val is not None:
+                        val_str = str(val)
+                        if not val_str.startswith('='):
+                            val_len = len(val_str.encode('gbk', errors='ignore'))
+                            if val_len > max_lengths[idx]: 
+                                max_lengths[idx] = val_len
+            
+            for col_idx, max_length in enumerate(max_lengths, 1):
+                col_letter = get_column_letter(col_idx)
+                ws.column_dimensions[col_letter].width = max(11, min(max_length * 1.2 + 3.0, 65))
                 
-                for col_idx, max_length in enumerate(max_lengths, 1):
-                    col_letter = get_column_letter(col_idx)
-                    ws.column_dimensions[col_letter].width = max(11, min(max_length * 1.2 + 3.0, 65))
-                    
-                for cell in ws[1]:
-                    if cell.value is not None: cell.fill = red_fill if is_intercept_sheet else fill_style
+            for cell in ws[1]:
+                if cell.value is not None: cell.fill = red_fill if is_intercept_sheet else fill_style
 
         ws_income = wb1["配送所得表"]
         date_str = f"{first_date.strftime('%m.%d')}-{last_date.strftime('%m.%d')}"
