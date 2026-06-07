@@ -11,11 +11,14 @@ interface SidebarProps {
 
 export function Sidebar({ theme, activeMenu, onSelectMenu, isRunning }: SidebarProps) {
   const MENU_ITEMS = [
-    { id: 'core', icon: '🏠', label: '综合算薪终端' },
-    { id: 'problem', icon: '🗑️', label: '问题单剔除' },
-    { id: 'price', icon: '💰', label: '单价重刷提审' },
-    { id: 'overdue', icon: '⏰', label: '超期申诉提审' },
-    { id: 'summary', icon: '📊', label: '兼职已发汇总' },
+    { id: 'core', icon: '✦', label: '兼职薪资核算' },
+    { id: 'issue_orders', icon: '▤', label: '问题单生成' },
+    { id: 'parttime_details', icon: '◈', label: '兼职核算记录' },
+    { id: 'salary_reissue', icon: '◬', label: '薪资补发记录' },
+    { id: 'salary_bind', icon: '◎', label: '发薪工具绑定' },
+    { id: 'referral_internal', icon: '⊞', label: '内推发放记录' },
+    { id: 'referral_field', icon: '◉', label: '地推发放记录' },
+    { id: 'abnormal_resignation', icon: '⚠', label: '异常离职流程' },
   ];
 
   return (

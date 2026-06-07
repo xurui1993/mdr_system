@@ -11,7 +11,6 @@ import { TerminalPanel } from './components/TerminalPanel';
 import { RightPanel } from './components/RightPanel';
 import { FolderOpen } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { DualFileActionPanel } from './components/DualFileActionPanel';
 
 function GenericToolPanel({ theme, actionId, isRunning, onRun, title, description, icon }: any) {
   return (
@@ -118,28 +117,30 @@ export default function App() {
             if (data && Object.keys(data).length > 0 && !data.error) {
               setAppConfig(prev => {
                 let newConfig = { ...prev, ...data };
-                if (newConfig.basePath === '../config.xlsx' || newConfig.basePath === '..') {
+                // 强制将带有 dist 的路径或者旧的默认路径重置为正确的工程同级目录
+                if (!newConfig.basePath || newConfig.basePath === '../config.xlsx' || newConfig.basePath === '..' || /dist[\\/]config\.xlsx$/i.test(newConfig.basePath)) {
                   newConfig.basePath = defaultData.configPath;
+                }
+                if (!newConfig.sourcePath || newConfig.sourcePath === './data' || /dist[\\/]data$/i.test(newConfig.sourcePath) || /[\\/]三亚$/i.test(newConfig.sourcePath)) {
+                  newConfig.sourcePath = defaultData.dataPath;
                 }
                 return newConfig;
               });
             } else {
               setAppConfig(prev => {
-                if (prev.basePath === '../config.xlsx' || prev.basePath === '..') {
-                  return { ...prev, basePath: defaultData.configPath };
+                let newConfig = { ...prev };
+                if (!newConfig.basePath || newConfig.basePath === '../config.xlsx' || newConfig.basePath === '..' || /dist[\\/]config\.xlsx$/i.test(newConfig.basePath)) {
+                  newConfig.basePath = defaultData.configPath;
                 }
-                return prev;
+                if (!newConfig.sourcePath || newConfig.sourcePath === './data' || /dist[\\/]data$/i.test(newConfig.sourcePath) || /[\\/]三亚$/i.test(newConfig.sourcePath)) {
+                  newConfig.sourcePath = defaultData.dataPath;
+                }
+                return newConfig;
               });
             }
           })
           .catch(err => {
             console.error("Failed to load config from backend", err);
-            setAppConfig(prev => {
-              if (prev.basePath === '../config.xlsx' || prev.basePath === '..') {
-                return { ...prev, basePath: defaultData.configPath };
-              }
-              return prev;
-            });
           })
           .finally(() => {
             isLoadedRef.current = true;
@@ -169,39 +170,17 @@ export default function App() {
     setTimeout(() => setToastMsg(prev => prev && prev.id === id ? null : prev), 3000);
   };
 
-  const handleAction = async (action: string, file1?: string, file2?: string) => {
+  const handleAction = async (action: string) => {
     if (isRunning) return;
     setIsRunning(true);
     setProgress(0);
 
     let currentConfig = { ...appConfig };
 
-    if (['dev_placeholder', 'overdue_review'].includes(action)) {
+    if (['dev_placeholder', 'remove_problem_orders', 'raise_price', 'overdue_review'].includes(action)) {
       setLogs([{ text: `>>> 🚧 该功能模块前端界面已就绪，正在等待 Python 后端引擎联调中...`, level: 'INFO' }]);
       setTimeout(() => setIsRunning(false), 1500);
       return;
-    }
-
-    if (action === 'remove_problem_orders') {
-       if (!file1 || !file2) {
-          setLogs(prev => [...prev, { text: `>>> ❌ 请先选择工资表和剔除表。`, level: 'ERROR' }]);
-          setIsRunning(false);
-          return;
-       }
-       currentConfig.sourcePath = file1;
-       currentConfig.targetPath = file2;
-       currentConfig.action = 'remove_problem_orders';
-    }
-
-    if (action === 'raise_price') {
-       if (!file1 || !file2) {
-          setLogs(prev => [...prev, { text: `>>> ❌ 请先选择工资表和雷神价目表。`, level: 'ERROR' }]);
-          setIsRunning(false);
-          return;
-       }
-       currentConfig.sourcePath = file1;
-       currentConfig.targetPath = file2;
-       currentConfig.action = 'raise_price';
     }
 
     if (action === 'summary_parttime_browse') {
@@ -397,9 +376,9 @@ export default function App() {
       return;
     }
 
-    let targetPath = currentConfig.targetPath || '';
+    let targetPath = '';
     if (action === 'raise_price' || action === 'remove_problem_orders') {
-        // Already handled targetPath assignment above
+        // Handled above, currentConfig has targetPath
     }
 
     try {
@@ -646,40 +625,14 @@ export default function App() {
 
           {!['core', 'issue_orders'].includes(activeMenu) && (
             <section className="flex gap-8 flex-shrink-0 mb-2">
-              <div className="w-full min-w-0 h-auto animate-in fade-in slide-in-from-bottom-4 duration-500">
-                {activeMenu === 'summary' ? (
+              <div className="w-full min-w-0 h-[256px] animate-in fade-in slide-in-from-bottom-4 duration-500">
+                {activeMenu === 'parttime_details' ? (
                   <ParttimeDetailsPanel 
                     theme={theme}
                     config={appConfig}
                     isRunning={isRunning}
                     onRun={() => handleAction('summary_parttime_btn')}
                     onBrowseFolder={() => handleAction('summary_parttime_browse')}
-                  />
-                ) : activeMenu === 'problem' ? (
-                  <DualFileActionPanel
-                    theme={theme}
-                    actionId="problem"
-                    isRunning={isRunning}
-                    onRun={(f1: string, f2: string) => handleAction('remove_problem_orders', f1, f2)}
-                    title="问题单精准剔除工具"
-                    subtitle="跨表匹配并置零问题单扣款金额，告别繁琐的手工比对"
-                    icon="🗑️"
-                    colorClass="#f87171"
-                    label1="1. 请选择已生成的【工资表工作薄】:"
-                    label2="2. 请选择需要核对的【问题单剔除工作薄】:"
-                  />
-                ) : activeMenu === 'price' ? (
-                  <DualFileActionPanel
-                    theme={theme}
-                    actionId="price"
-                    isRunning={isRunning}
-                    onRun={(f1: string, f2: string) => handleAction('raise_price', f1, f2)}
-                    title="雷神单价重刷工具"
-                    subtitle="单价配置错了？无需重跑，一键反写最新单价并比对"
-                    icon="💰"
-                    colorClass="#34d399"
-                    label1="1. 请选择已生成的【工资表工作薄】:"
-                    label2="2. 请选择最新的【雷神价格提审工作薄】:"
                   />
                 ) : (
                   <GenericToolPanel 
@@ -688,11 +641,19 @@ export default function App() {
                     isRunning={isRunning}
                     onRun={() => handleAction('dev_placeholder')}
                     title={
-                      activeMenu === 'overdue' ? '超期申诉提审' : '模块开发中'
+                      activeMenu === 'salary_reissue' ? '薪资补发记录' :
+                      activeMenu === 'salary_bind' ? '发薪工具绑定' :
+                      activeMenu === 'referral_internal' ? '内推发放记录' :
+                      activeMenu === 'referral_field' ? '地推发放记录' :
+                      activeMenu === 'abnormal_resignation' ? '异常离职流程' : '模块开发中'
                     }
-                    description="核心逻辑开发中，敬请期待..."
+                    description="当前业务模块正在拼命研发中，即将上线，敬请期待后端引擎组装完成。"
                     icon={
-                      activeMenu === 'overdue' ? '⏰' : '✨'
+                      activeMenu === 'salary_reissue' ? '◬' :
+                      activeMenu === 'salary_bind' ? '◎' :
+                      activeMenu === 'referral_internal' ? '⊞' :
+                      activeMenu === 'referral_field' ? '◉' :
+                      activeMenu === 'abnormal_resignation' ? '⚠' : '✨'
                     }
                   />
                 )}

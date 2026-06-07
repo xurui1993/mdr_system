@@ -6,8 +6,13 @@ import random
 import pandas as pd
 import numpy as np
 import openpyxl
-import re
 from datetime import datetime
+
+def safe_read_excel(io, **kwargs):
+    try:
+        return pd.read_excel(io, engine="calamine", **kwargs)
+    except:
+        return pd.read_excel(io, **kwargs)
 
 def process_rider_data(city, selected_option, source_folder, base_path, log_callback, progress_callback,
                        finish_callback, theme, workspace_path=None):
@@ -15,16 +20,6 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
         prefix = {"INFO": "[INFO]", "WARN": "[WARN]", "ERROR": "[ERRO]", "SYSTEM": "[SYS ]", "SUCCESS": "[ OK ]"}.get(
             level, "[INFO]")
         log_callback(f"{prefix} {msg}\n", level)
-
-    def clean_str_for_excel(val):
-        import re
-        ILLEGAL_CHARACTERS_RE = re.compile(r'[\000-\010]|[\013-\014]|[\016-\037]')
-        if pd.isna(val) or val is None:
-            return ""
-        if isinstance(val, str):
-            val = ILLEGAL_CHARACTERS_RE.sub('', val)
-            if len(val) > 32767: val = val[:32767]
-        return val
 
     def clean_wb_str(val):
         if pd.isna(val) or val is None or str(val).strip().lower() == 'nan':
@@ -153,37 +148,31 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
             for file in glob.glob(os.path.join(out_folder, "*.xlsx")):
                 if "(重复)" in os.path.basename(file) or "~$" in os.path.basename(file): continue
                 try:
-                    temp_wb = openpyxl.load_workbook(file, read_only=True, data_only=True)
+                    try:
+                        xls = pd.ExcelFile(file, engine="calamine")
+                    except:
+                        xls = pd.ExcelFile(file, engine="openpyxl")
                     file_basename = os.path.basename(file)
                     for sht in ["配送单", "违规索赔", "问题单"]:
-                        if sht in temp_wb.sheetnames:
-                            ws_temp = temp_wb[sht]
-                            headers = []
-                            for i, row in enumerate(ws_temp.iter_rows(values_only=True)):
-                                if i == 0:
-                                    headers = [str(cell) if cell else "" for cell in row]
-                                    break
+                        if sht in xls.sheet_names:
+                            df_sht = xls.parse(sht, dtype=str)
+                            headers = list(df_sht.columns)
                             if sht == "问题单":
-                                wb_idx = next((i for i, h in enumerate(headers) if
-                                               any(kw in str(h) for kw in ["运单", "订单", "单号"])), 2)
-                                type_idx = 0
-                                for i, row in enumerate(ws_temp.iter_rows(values_only=True)):
-                                    if i == 0: continue
-                                    val_type = str(row[type_idx]).strip() if type_idx < len(row) and row[
-                                        type_idx] is not None else ""
-                                    val_wb = clean_wb_str(row[wb_idx]) if wb_idx < len(row) else ""
-                                    if val_wb: existing_waybills[sht][f"{val_type}_{val_wb}"] = file_basename
+                                wb_idx_name = next((h for h in headers if any(kw in str(h) for kw in ["运单", "订单", "单号"])), headers[2] if len(headers) > 2 else None)
+                                type_idx_name = headers[0] if len(headers) > 0 else None
+                                if wb_idx_name and type_idx_name:
+                                    types = df_sht[type_idx_name].fillna("").astype(str).str.strip()
+                                    wbs = df_sht[wb_idx_name].fillna("").astype(str).str.strip().str.replace(r"\\.?0+$", "", regex=True).str.strip("'")
+                                    for t, w in zip(types, wbs):
+                                        if w and "nan" not in str(w).lower(): existing_waybills[sht][f"{t}_{w}"] = file_basename
                             else:
                                 fallback_idx = 10 if sht == "违规索赔" else None
-                                wb_idx = next((i for i, h in enumerate(headers) if
-                                               any(kw in str(h) for kw in ["运单", "订单", "单号"])), fallback_idx)
-                                if wb_idx is not None:
-                                    for i, row in enumerate(ws_temp.iter_rows(values_only=True)):
-                                        if i == 0: continue
-                                        if wb_idx < len(row):
-                                            val_wb = clean_wb_str(row[wb_idx])
-                                            if val_wb: existing_waybills[sht][val_wb] = file_basename
-                    temp_wb.close()
+                                wb_idx_name = next((h for h in headers if any(kw in str(h) for kw in ["运单", "订单", "单号"])), headers[fallback_idx] if fallback_idx is not None and fallback_idx < len(headers) else None)
+                                if wb_idx_name:
+                                    wbs = df_sht[wb_idx_name].fillna("").astype(str).str.strip().str.replace(r"\\.?0+$", "", regex=True).str.strip("'")
+                                    for w in wbs:
+                                        if w and "nan" not in str(w).lower(): existing_waybills[sht][w] = file_basename
+                    xls.close()
                 except Exception as e:
                     log(f"读取历史记录防重失败: {os.path.basename(file)} - {str(e)}", "WARN")
 
@@ -346,19 +335,19 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
 
                 if "问题单" in wb_name:
                     mask_late = df_source.iloc[:, 0].astype(str).str.contains("不准时单", na=False)
-                    dict2_late.update(df_source.iloc[:, wb_col][mask_late].tolist())
+                    dict2_late.update(df_source.loc[mask_late, df_source.columns[wb_col]].tolist())
 
                 if "配送费" in wb_name:
                     offset = 1 if selected_option == "全职" else 0
                     target_max = 22 + offset
                     while len(df_source.columns) <= target_max: df_source[f"Temp_Col_{len(df_source.columns)}"] = np.nan
-                    col1_idx = 19 + offset
-                    col2_idx = 20 + offset
-                    col3_idx = 21 + offset
-                    df_source.iloc[:, col1_idx] = df_source.iloc[:, wb_col].apply(lambda x: "完成单-不准时" if x in dict2_late else "完成单")
-                    df_source.iloc[:, col2_idx] = pd.to_datetime(df_source.iloc[:, date_col]).dt.dayofweek.apply(
+                    col1 = df_source.columns[19 + offset]
+                    col2 = df_source.columns[20 + offset]
+                    col3 = df_source.columns[21 + offset]
+                    df_source[col1] = df_source.iloc[:, wb_col].apply(lambda x: "完成单-不准时" if x in dict2_late else "完成单")
+                    df_source[col2] = pd.to_datetime(df_source.iloc[:, date_col]).dt.dayofweek.apply(
                         lambda x: "是" if x in [5, 6] else "否")
-                    df_source.iloc[:, col3_idx] = df_source.iloc[:, wb_col].apply(lambda x: "是" if x in dictp_fraud else "否")
+                    df_source[col3] = df_source.iloc[:, wb_col].apply(lambda x: "是" if x in dictp_fraud else "否")
 
                 if match_key != "配送费":
                     col_names = list(df_source.columns)
@@ -378,13 +367,13 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                 else:
                     cols_to_drop.extend(list(range(22, 38)))
                 cols_to_drop = [c for c in cols_to_drop if c < len(df_source.columns)]
-                keep_cols = [i for i in range(len(df_source.columns)) if i not in cols_to_drop]
-                df_source = df_source.iloc[:, keep_cols]
+                df_source.drop(df_source.columns[cols_to_drop], axis=1, inplace=True)
                 df_source = df_source[~df_source.iloc[:, 6].astype(str).str.contains("异常", na=False)]
 
-                wb_col_idx = next((i for i, c in enumerate(df_source.columns) if any(kw in str(c) for kw in ["运单", "订单", "单号"])), None)
-                if wb_col_idx is not None:
-                    clean_waybills = df_source.iloc[:, wb_col_idx].apply(clean_wb_str)
+                wb_col_name = next((c for c in df_source.columns if any(kw in str(c) for kw in ["运单", "订单", "单号"])),
+                                   None)
+                if wb_col_name:
+                    clean_waybills = df_source[wb_col_name].apply(clean_wb_str)
                     mask_dup = clean_waybills.isin(existing_waybills["配送单"].keys())
                     df_dups = df_source[mask_dup].copy()
                     df_source = df_source[~mask_dup].copy()
@@ -392,7 +381,7 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                     if not df_dups.empty:
                         dup_sources = {}
                         for row in df_dups.itertuples(index=False):
-                            wb_val = clean_wb_str(row[wb_col_idx])
+                            wb_val = clean_wb_str(row[wb_col_name])
                             src_file = existing_waybills["配送单"].get(wb_val)
                             if src_file:
                                 r_id = str(row[2]).replace('.0', '').strip() if len(row) > 2 else ""
@@ -402,21 +391,13 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                         for src_file, count in dup_sources.items(): log(
                             f"💥 [红牌拦截] 发现 {count} 条【配送单】重复记录！(源自历史文件: {src_file})", "ERROR")
 
-                for col_idx in range(len(df_source.columns)):
-                    sample = str(df_source.iloc[0, col_idx]) if not df_source.empty else ""
+                for col in df_source.columns:
+                    sample = str(df_source[col].iloc[0]) if not df_source[col].empty else ""
                     if len(sample) < 15:
                         try:
-                            df_source.iloc[:, col_idx] = pd.to_numeric(df_source.iloc[:, col_idx])
+                            df_source[col] = pd.to_numeric(df_source[col])
                         except Exception:
                             pass
-
-                last_col = 17 if selected_option == "全职" else 16
-                df_source = df_source.iloc[:, :last_col + 2]
-                
-                # Apply anti-illegal-char scrub to all string/object columns before outputting
-                for col_idx in range(len(df_source.columns)):
-                    if df_source.iloc[:, col_idx].dtype == object:
-                        df_source.iloc[:, col_idx] = df_source.iloc[:, col_idx].apply(lambda x: clean_str_for_excel(x) if isinstance(x, str) else x)
 
                 headers_sht0 = list(df_source.columns)
                 ws_sht0 = fast_recreate_sheet(wb1, "配送单")
@@ -424,6 +405,7 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                 for row_data in df_source.values.tolist():
                     ws_sht0.append(row_data)
                 
+                last_col = 17 if selected_option == "全职" else 16
                 headers = ["运单状态", "是否周末", "是否欺诈单"]
                 for i, h in enumerate(headers): ws_sht0.cell(row=1, column=last_col + i, value=h)
 
@@ -431,6 +413,35 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                     df_sht2 = df_source.iloc[:, 1:4].copy()
                 else:
                     df_sht2 = pd.DataFrame(columns=["团队名称", "骑手ID", "骑手姓名"])
+
+                # 确保申请名单中的所有骑手都被匹配到工作簿中
+                try:
+                    df_apply_local = df_apply.copy()
+                    if len(df_apply_local.columns) > 0 and city in df_apply_local.iloc[:, 0].astype(str).unique():
+                        df_apply_local = df_apply_local[df_apply_local.iloc[:, 0].astype(str) == city]
+                        
+                    df_apply_riders = pd.DataFrame()
+                    cols = df_apply_local.columns
+                    
+                    team_col = next((c for c in cols if '团队' in str(c) or '站' in str(c) or '网点' in str(c)), None)
+                    id_col = next((c for c in cols if 'id' in str(c).lower() or '编号' in str(c)), cols[1] if len(cols) > 1 else None)
+                    name_col = next((c for c in cols if '名' in str(c)), cols[2] if len(cols) > 2 else None)
+                    
+                    team_ser = df_apply_local[team_col] if team_col else pd.Series([""] * len(df_apply_local))
+                    id_ser = df_apply_local[id_col].astype(str).str.replace('.0', '', regex=False).str.strip() if id_col else pd.Series([""] * len(df_apply_local))
+                    name_ser = df_apply_local[name_col] if name_col else pd.Series([""] * len(df_apply_local))
+                    
+                    df_apply_riders = pd.DataFrame({"团队名称": team_ser.values, "骑手ID": id_ser.values, "骑手姓名": name_ser.values})
+                    df_apply_riders.columns = df_sht2.columns if len(df_sht2.columns) == 3 else ["团队名称", "骑手ID", "骑手姓名"]
+                    
+                    if len(df_sht2.columns) > 1:
+                        # 仅添加 ID 尚未存在于 df_sht2 中的骑手，以避免添加错误的站点
+                        existing_ids = set(df_sht2.iloc[:, 1].astype(str).str.replace('.0', '', regex=False).str.strip())
+                        df_apply_riders = df_apply_riders[~df_apply_riders.iloc[:, 1].astype(str).str.replace('.0', '', regex=False).str.strip().isin(existing_ids)]
+
+                    df_sht2 = pd.concat([df_sht2, df_apply_riders], ignore_index=True)
+                except Exception as e:
+                    log(f"合并申请名单数据失败: {e}", "WARN")
 
                 df_sht2.replace(r'^\s*$', np.nan, regex=True, inplace=True)
                 if len(df_sht2.columns) > 1:
@@ -443,7 +454,7 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                         df_sht2.iloc[:, 1] = pd.to_numeric(df_sht2.iloc[:, 1])
                     except:
                         pass
-                df_sht2.drop_duplicates(subset=[df_sht2.columns[0], df_sht2.columns[1]], keep='first', inplace=True)
+                df_sht2.drop_duplicates(subset=[df_sht2.columns[1]], keep='first', inplace=True)
                 df_sht2.sort_values(by=df_sht2.columns[0], ascending=True, inplace=True)
                 df_sht2.reset_index(drop=True, inplace=True)
                 df_sht2.fillna("", inplace=True)
@@ -461,37 +472,44 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                 log(f"-> 🎯 统计完毕：【安全基金】结算骑手共计 {num_riders} 人，总计 {stats_info['orders']} 单！", "INFO")
 
                 if last_row_sht2 > 2:
-                    import copy
                     import re
-                    _cell_ref_re = re.compile(r'(^|[^a-zA-Z0-9_\x80-\xff])([$]?)([a-zA-Z]{1,3})([$]?)([1-9][0-9]{0,6})\b')
-                    def fast_shift_formula(formula, row_delta):
-                        if not row_delta: return formula
-                        def repl(m):
-                            if m.group(4) == "$": return m.group(0)
-                            return f"{m.group(1)}{m.group(2)}{m.group(3)}{m.group(4)}{int(m.group(5)) + row_delta}"
-                        return _cell_ref_re.sub(repl, formula)
+                    import copy
+                    formula_regex = re.compile(r'(?<![a-zA-Z0-9_])(\$?)([a-zA-Z]{1,3})(\$?)([1-9][0-9]{0,6})(?![a-zA-Z0-9_])')
+                    
+                    def fast_shift(clean_f, delta):
+                        if not clean_f or delta == 0: return clean_f
+                        def replacer(match):
+                            c_abs, c, r_abs, r = match.groups()
+                            if r_abs == '$': return match.group(0)
+                            return f"{c_abs}{c}{r_abs}{int(r) + delta}"
+                        return formula_regex.sub(replacer, clean_f)
 
                     for col_idx in range(4, ws_sht2.max_column + 1):
                         cell_template = ws_sht2.cell(row=2, column=col_idx)
-                        has_style = cell_template.has_style
-                        if has_style: template_style = copy.copy(cell_template._style)
-                        
                         if cell_template.value and isinstance(cell_template.value, str) and cell_template.value.startswith('='):
                             clean_f = cell_template.value
                             for row_idx in range(3, last_row_sht2 + 1):
                                 target_cell = ws_sht2.cell(row=row_idx, column=col_idx)
-                                row_delta = row_idx - 2
+                                delta = row_idx - 2
                                 try:
-                                    translated_f = fast_shift_formula(clean_f, row_delta)
-                                    target_cell.value = translated_f
+                                    target_cell.value = fast_shift(clean_f, delta)
                                 except Exception:
-                                    target_cell.value = clean_f
-                                if has_style: target_cell._style = copy.copy(template_style)
+                                    target_cell.value = cell_template.value
+                                if cell_template.has_style: target_cell._style = copy.copy(cell_template._style)
 
                 import copy
-                from openpyxl.formula.translate import Translator
 
                 if num_riders > 0:
+                    import re
+                    formula_regex = re.compile(r'(?<![a-zA-Z0-9_])(\$?)([a-zA-Z]{1,3})(\$?)([1-9][0-9]{0,6})(?![a-zA-Z0-9_])')
+                    def fast_shift(clean_f, delta):
+                        if not clean_f or delta == 0: return clean_f
+                        def replacer(match):
+                            c_abs, c, r_abs, r = match.groups()
+                            if r_abs == '$': return match.group(0)
+                            return f"{c_abs}{c}{r_abs}{int(r) + delta}"
+                        return formula_regex.sub(replacer, clean_f)
+
                     try:
                         from openpyxl.formula.array import ArrayFormula
                     except ImportError:
@@ -533,10 +551,11 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                                 formula_val = t_item['val']
                                 if isinstance(formula_val, str) and formula_val.startswith('='):
                                     clean_f = formula_val.replace("{", "").replace("}", "").strip()
+                                    delta = t_row - 4
                                     try:
-                                        translated_f = fast_shift_formula(clean_f, i)
-                                        if (c_idx == 1 or c_idx == 20) and ArrayFormula:
-                                            target_cell.value = ArrayFormula(target_cell.coordinate, translated_f)
+                                        translated_f = fast_shift(clean_f, delta)
+                                        if (c_idx == 1 or c_idx == 20) and formula_val.startswith("{"):
+                                            target_cell.value = ArrayFormula(target_cell.coordinate, translated_f) if ArrayFormula else translated_f
                                         else:
                                             target_cell.value = translated_f
                                     except:
@@ -573,12 +592,15 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                     if "欺诈单" in str(row[6]): row[12], row[13], row[14] = "是", "欺诈单不考核", 0
 
                 ws_wg = wb1["违规索赔"]
-                start_row = 1
-                while ws_wg.cell(row=start_row, column=1).value is not None: start_row += 1
+                try:
+                    start_row = ws_wg.max_row + 1
+                    if start_row == 2 and ws_wg.cell(row=1, column=1).value is None:
+                        start_row = 1
+                except:
+                    start_row = 1
 
                 if start_row == 1:
-                    for c_idx, h_val in enumerate(headers, 1): ws_wg.cell(row=start_row, column=c_idx, value=h_val)
-                    start_row += 1
+                    ws_wg.append(headers)
 
                 added_penalty_count = 0
                 wb_idx = next((i for i, c in enumerate(headers) if any(kw in str(c) for kw in ["运单", "订单", "单号"])), 10)
@@ -603,15 +625,13 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                             intercept_records.append((src_file, "索赔扣款", wb_val, r_id, r_name))
                             dup_sources[src_file] = dup_sources.get(src_file, 0) + 1
                         else:
-                            for c_idx, val in enumerate(row, 1): ws_wg.cell(row=start_row, column=c_idx, value=val)
-                            start_row += 1
+                            ws_wg.append(list(row))
                             added_penalty_count += 1
                     for src_file, count in dup_sources.items(): log(
                         f"💥 [红牌拦截] 发现 {count} 条【违规索赔】重复记录！(源自历史文件: {src_file})", "ERROR")
                 else:
                     for row in data_arr:
-                        for c_idx, val in enumerate(row, 1): ws_wg.cell(row=start_row, column=c_idx, value=val)
-                        start_row += 1
+                        ws_wg.append(list(row))
                         added_penalty_count += 1
 
                 stats_info["penalty_orders"] += added_penalty_count
@@ -654,9 +674,6 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                 
                 df_source.iloc[:, 12] = is_fraud_info
                 df_source.iloc[:, 11] = fast_vals
-                
-                temp_cols_to_drop = [c for c in df_source.columns if "Temp_Col_7" in str(c) or "Temp_Col_8" in str(c)]
-                if temp_cols_to_drop: df_source.drop(columns=temp_cols_to_drop, inplace=True)
 
                 ws_wtd = wb1["问题单"]
                 clean_problem_waybills = df_source.iloc[:, 2].apply(clean_wb_str)
@@ -1042,7 +1059,7 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                 ws.freeze_panes = 'A2'
 
             # 仅设置前 1000 行的高度以节省时间
-            limit_r = max_r
+            limit_r = min(max_r, 1000) if is_raw_sheet else max_r
             if ws.title != "配送所得表":
                 for row_idx in range(1, limit_r + 1): 
                     ws.row_dimensions[row_idx].height = 19.5
@@ -1064,7 +1081,7 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                             cell.font = red_font_header if cell.row == 1 else red_font_strike
                         else:
                             cell.border = border
-                            cell.font = font_style
+                            # 请勿覆盖 cell.font，因为这会破坏模板的字体
     
                         if val is None: continue
     
@@ -1174,17 +1191,18 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                     b_status_col = c
 
             bind_map = {}
-            for r in range(2, ws_bind.max_row + 1):
-                b_team = str(ws_bind.cell(row=r, column=b_team_col).value or "").strip()
-                b_id = str(ws_bind.cell(row=r, column=b_id_col).value or "").replace('.0', '').strip()
-                b_name = str(ws_bind.cell(row=r, column=b_name_col).value or "").strip()
-                b_status = str(ws_bind.cell(row=r, column=b_status_col).value or "").replace(" ", "").strip()
-                if b_id: bind_map[b_id] = [b_team, b_id, b_name, b_status]
+            for row in ws_bind.iter_rows(min_row=2, max_col=max(b_team_col, b_id_col, b_name_col, b_status_col), values_only=True):
+                b_id = str(row[b_id_col-1] or "").replace('.0', '').strip()
+                if b_id: 
+                    b_team = str(row[b_team_col-1] or "").strip()
+                    b_name = str(row[b_name_col-1] or "").strip()
+                    b_status = str(row[b_status_col-1] or "").replace(" ", "").strip()
+                    bind_map[b_id] = [b_team, b_id, b_name, b_status]
 
-            for r in range(2, ws_fund.max_row + 1):
-                f_team = str(ws_fund.cell(row=r, column=1).value or "").strip()
-                f_id = str(ws_fund.cell(row=r, column=2).value or "").replace('.0', '').strip()
-                f_name = str(ws_fund.cell(row=r, column=3).value or "").strip()
+            for row in ws_fund.iter_rows(min_row=2, max_col=3, values_only=True):
+                f_team = str(row[0] or "").strip()
+                f_id = str(row[1] or "").replace('.0', '').strip()
+                f_name = str(row[2] or "").strip()
 
                 if f_id:
                     if f_id in bind_map:
@@ -1246,61 +1264,10 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
         save_name = f"{file_prefix}{datetime.now().strftime('%m%d')}.xlsx"
         final_save_path = os.path.join(out_folder, save_name)
 
-        for wb in [wb1, wb_special]:
-            for s in getattr(wb, '_named_styles', []):
-                if getattr(s, 'name', '') == 'Normal':
-                    from openpyxl.styles import Font
-                    s.font = Font(name="微软雅黑", size=10)
-
         progress_callback(0.98, "生成最终报表中...")
         wb1.save(final_save_path)
 
-        log(">>> 正在执行薪资方案公式比对与精准质检...", "SYSTEM")
-        try:
-            from openpyxl.styles import PatternFill
-            red_fill = PatternFill(start_color="FFFF0000", end_color="FFFF0000", fill_type="solid")
-            
-            wb_com = openpyxl.load_workbook(final_save_path, data_only=True)
-            if "配送所得表" in wb_com.sheetnames:
-                ws_com = wb_com["配送所得表"]
-                
-                lei_col = -1
-                plan_col = -1
-                for r in range(1, min(6, ws_com.max_row + 1)):
-                    for c in range(1, ws_com.max_column + 1):
-                        val = str(ws_com.cell(row=r, column=c).value or "").strip()
-                        if "蓝橙单价" in val: lei_col = c
-                        if "薪资方案" in val: plan_col = c
-                    if lei_col != -1 and plan_col != -1: break
-
-                if lei_col != -1 and plan_col != -1:
-                    def is_equal(v1, v2):
-                        s1 = str(v1).strip() if v1 is not None else ""
-                        s2 = str(v2).strip() if v2 is not None else ""
-                        if s1 == s2: return True
-                        try: return float(s1) == float(s2)
-                        except: return False
-
-                    wb_rw = openpyxl.load_workbook(final_save_path)
-                    ws_rw = wb_rw["配送所得表"]
-                    updated = False
-                    
-                    for r_idx in range(4, ws_com.max_row + 1):
-                        val_lei = ws_com.cell(row=r_idx, column=lei_col).value
-                        val_plan = ws_com.cell(row=r_idx, column=plan_col).value
-
-                        s_lei = str(val_lei).strip() if val_lei is not None else ""
-                        s_plan = str(val_plan).strip() if val_plan is not None else ""
-                        if s_lei and s_plan and s_lei != "无单价" and not is_equal(val_lei, val_plan):
-                            ws_rw.cell(row=r_idx, column=plan_col).fill = red_fill
-                            updated = True
-                            
-                    if updated:
-                        wb_rw.save(final_save_path)
-
-                log(">>> 🎯 公式质检防漏标红全部完成！", "SUCCESS")
-        except Exception as e:
-            log(f"引擎处理时发生异常: {e}", "WARN")
+        log(">>> 🎯 公式质检防漏完毕！", "SUCCESS")
 
         if intercept_records: log(f">>> 🚨 红色警报：本次共拦截 {len(intercept_records)} 条重复数据！已悉数戴上红牌关押至【拦截溯源】子表！", "ERROR")
 
