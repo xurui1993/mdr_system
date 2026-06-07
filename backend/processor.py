@@ -162,14 +162,14 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                                 type_idx_name = headers[0] if len(headers) > 0 else None
                                 if wb_idx_name and type_idx_name:
                                     types = df_sht[type_idx_name].fillna("").astype(str).str.strip()
-                                    wbs = df_sht[wb_idx_name].fillna("").astype(str).str.strip().str.replace(r"\\.?0+$", "", regex=True).str.strip("'")
+                                    wbs = df_sht[wb_idx_name].fillna("").astype(str).str.strip().str.replace(r"\.0+$", "", regex=True).str.strip("'")
                                     for t, w in zip(types, wbs):
                                         if w and "nan" not in str(w).lower(): existing_waybills[sht][f"{t}_{w}"] = file_basename
                             else:
                                 fallback_idx = 10 if sht == "违规索赔" else None
                                 wb_idx_name = next((h for h in headers if any(kw in str(h) for kw in ["运单", "订单", "单号"])), headers[fallback_idx] if fallback_idx is not None and fallback_idx < len(headers) else None)
                                 if wb_idx_name:
-                                    wbs = df_sht[wb_idx_name].fillna("").astype(str).str.strip().str.replace(r"\\.?0+$", "", regex=True).str.strip("'")
+                                    wbs = df_sht[wb_idx_name].fillna("").astype(str).str.strip().str.replace(r"\.0+$", "", regex=True).str.strip("'")
                                     for w in wbs:
                                         if w and "nan" not in str(w).lower(): existing_waybills[sht][w] = file_basename
                     xls.close()
@@ -267,12 +267,15 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                 try:
                     s_replaced = df_source[col].copy()
                     s_replaced.replace("", np.nan, inplace=True)
-                    s_num = pd.to_numeric(s_replaced)
-                    # 如果转换成功，且没有将有效的字符串强制转换为 NaN（除非它们是空的）
-                    if not s_num.isna().any() or s_replaced.isna().equals(s_num.isna()):
-                        df_source[col] = s_num
+                    sample_val = s_replaced.dropna().iloc[0] if not s_replaced.dropna().empty else ""
+                    if len(str(sample_val).replace('.0', '')) < 15:
+                        s_num = pd.to_numeric(s_replaced)
+                        # 如果转换成功，且没有将有效的字符串强制转换为 NaN（除非它们是空的）
+                        if not s_num.isna().any() or s_replaced.isna().equals(s_num.isna()):
+                            df_source[col] = s_num
                 except Exception:
                     pass
+            df_source = df_source.replace({np.nan: None})
 
             if "兼职价格档案" in wb_name:
                 try:
@@ -398,6 +401,7 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                             df_source[col] = pd.to_numeric(df_source[col])
                         except Exception:
                             pass
+                df_source = df_source.replace({np.nan: None})
 
                 headers_sht0 = list(df_source.columns)
                 ws_sht0 = fast_recreate_sheet(wb1, "配送单")
