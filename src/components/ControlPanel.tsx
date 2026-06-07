@@ -162,7 +162,7 @@ export function ControlPanel({ theme, config, onChangeConfig, onAction }: Contro
         <span className="text-[14px] text-slate-400 w-[90px] shrink-0 tracking-widest uppercase font-mono">{theme.lbl_config}</span>
         <input 
           type="text" 
-          value={config.basePath} 
+          value={config.basePath || ''} 
           onChange={e => updateConfig('basePath', e.target.value)}
           className="glass-input shadow-inner focus:border-sky-500/50 rounded-xl px-4 py-3 font-mono text-[14px] text-sky-100 flex-1 outline-none mr-4 transition-all tracking-wide" 
         />
@@ -176,7 +176,7 @@ export function ControlPanel({ theme, config, onChangeConfig, onAction }: Contro
         <span className="text-[14px] text-slate-400 w-[90px] shrink-0 tracking-widest uppercase font-mono">{theme.lbl_source}</span>
         <input 
           type="text" 
-          value={config.sourcePath} 
+          value={config.sourcePath || ''} 
           onChange={e => updateConfig('sourcePath', e.target.value)}
           className="glass-input shadow-inner focus:border-sky-500/50 rounded-xl px-4 py-3 font-mono text-[14px] text-sky-100 flex-1 outline-none mr-4 transition-all tracking-wide" 
         />
