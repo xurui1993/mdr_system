@@ -454,7 +454,7 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                         df_sht2.iloc[:, 1] = pd.to_numeric(df_sht2.iloc[:, 1])
                     except:
                         pass
-                df_sht2.drop_duplicates(subset=[df_sht2.columns[1]], keep='first', inplace=True)
+                df_sht2.drop_duplicates(subset=[df_sht2.columns[0], df_sht2.columns[1]], keep='first', inplace=True)
                 df_sht2.sort_values(by=df_sht2.columns[0], ascending=True, inplace=True)
                 df_sht2.reset_index(drop=True, inplace=True)
                 df_sht2.fillna("", inplace=True)
@@ -1058,18 +1058,12 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
             elif ws.title != "配送所得表":
                 ws.freeze_panes = 'A2'
 
-            # 仅设置前 1000 行的高度以节省时间
-            limit_r = min(max_r, 1000) if is_raw_sheet else max_r
+            # 对所有表格进行全量行高和单元格样式编排
             if ws.title != "配送所得表":
-                for row_idx in range(1, limit_r + 1): 
+                for row_idx in range(1, max_r + 1): 
                     ws.row_dimensions[row_idx].height = 19.5
 
-            if ws.title == "配送所得表":
-                iter_max_r = 0 # 跳过所得表的慢速单元格遍历
-            elif is_raw_sheet:
-                iter_max_r = limit_r
-            else:
-                iter_max_r = max_r
+            iter_max_r = max_r
                 
             if iter_max_r > 0:
                 for row in ws.iter_rows(min_row=1, max_row=iter_max_r, min_col=1, max_col=max_c):
@@ -1081,7 +1075,7 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                             cell.font = red_font_header if cell.row == 1 else red_font_strike
                         else:
                             cell.border = border
-                            # 请勿覆盖 cell.font，因为这会破坏模板的字体
+                            cell.font = font_style
     
                         if val is None: continue
     
