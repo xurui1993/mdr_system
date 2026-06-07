@@ -435,9 +435,10 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                     df_apply_riders.columns = df_sht2.columns if len(df_sht2.columns) == 3 else ["团队名称", "骑手ID", "骑手姓名"]
                     
                     if len(df_sht2.columns) > 1:
-                        # 仅添加 ID 尚未存在于 df_sht2 中的骑手，以避免添加错误的站点
-                        existing_ids = set(df_sht2.iloc[:, 1].astype(str).str.replace('.0', '', regex=False).str.strip())
-                        df_apply_riders = df_apply_riders[~df_apply_riders.iloc[:, 1].astype(str).str.replace('.0', '', regex=False).str.strip().isin(existing_ids)]
+                        # 仅添加 团队+ID 尚未存在于 df_sht2 中的骑手，以避免影响跨站点同 ID 骑手
+                        exist_keys = set(df_sht2.iloc[:, 0].astype(str).str.strip() + "_" + df_sht2.iloc[:, 1].astype(str).str.replace('.0', '', regex=False).str.strip())
+                        apply_keys = df_apply_riders.iloc[:, 0].astype(str).str.strip() + "_" + df_apply_riders.iloc[:, 1].astype(str).str.replace('.0', '', regex=False).str.strip()
+                        df_apply_riders = df_apply_riders[~apply_keys.isin(exist_keys)]
 
                     df_sht2 = pd.concat([df_sht2, df_apply_riders], ignore_index=True)
                 except Exception as e:
@@ -454,7 +455,7 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                         df_sht2.iloc[:, 1] = pd.to_numeric(df_sht2.iloc[:, 1])
                     except:
                         pass
-                df_sht2.drop_duplicates(subset=[df_sht2.columns[1]], keep='first', inplace=True)
+                df_sht2.drop_duplicates(subset=[df_sht2.columns[0], df_sht2.columns[1]], keep='first', inplace=True)
                 df_sht2.sort_values(by=df_sht2.columns[0], ascending=True, inplace=True)
                 df_sht2.reset_index(drop=True, inplace=True)
                 df_sht2.fillna("", inplace=True)
@@ -472,25 +473,32 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                 log(f"-> 🎯 统计完毕：【安全基金】结算骑手共计 {num_riders} 人，总计 {stats_info['orders']} 单！", "INFO")
 
                 if last_row_sht2 > 2:
-                    from openpyxl.formula.translate import Translator
                     import copy
-                    translator_cache_sht2 = {}
+                    import re
+                    _cell_ref_re = re.compile(r'(^|[^a-zA-Z0-9_\x80-\xff])([$]?)([a-zA-Z]{1,3})([$]?)([1-9][0-9]{0,6})\b')
+                    def fast_shift_formula(formula, row_delta):
+                        if not row_delta: return formula
+                        def repl(m):
+                            if m.group(4) == "$": return m.group(0)
+                            return f"{m.group(1)}{m.group(2)}{m.group(3)}{m.group(4)}{int(m.group(5)) + row_delta}"
+                        return _cell_ref_re.sub(repl, formula)
+
                     for col_idx in range(4, ws_sht2.max_column + 1):
                         cell_template = ws_sht2.cell(row=2, column=col_idx)
-                        if cell_template.value and isinstance(cell_template.value,
-                                                              str) and cell_template.value.startswith('='):
+                        has_style = cell_template.has_style
+                        if has_style: template_style = copy.copy(cell_template._style)
+                        
+                        if cell_template.value and isinstance(cell_template.value, str) and cell_template.value.startswith('='):
                             clean_f = cell_template.value
-                            if clean_f not in translator_cache_sht2:
-                                translator_cache_sht2[clean_f] = Translator(clean_f, origin=cell_template.coordinate)
-                            translator = translator_cache_sht2[clean_f]
                             for row_idx in range(3, last_row_sht2 + 1):
                                 target_cell = ws_sht2.cell(row=row_idx, column=col_idx)
+                                row_delta = row_idx - 2
                                 try:
-                                    translated_f = translator.translate_formula(target_cell.coordinate)
+                                    translated_f = fast_shift_formula(clean_f, row_delta)
                                     target_cell.value = translated_f
                                 except Exception:
-                                    target_cell.value = cell_template.value
-                                if cell_template.has_style: target_cell._style = copy.copy(cell_template._style)
+                                    target_cell.value = clean_f
+                                if has_style: target_cell._style = copy.copy(template_style)
 
                 import copy
                 from openpyxl.formula.translate import Translator
@@ -520,7 +528,6 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                             'col_letter': get_column_letter(c_idx)
                         })
 
-                    translator_cache_sht1 = {}
                     for i in range(num_riders):
                         t_row = i + 4
                         for c_idx, t_item in enumerate(template_row_info, 1):
@@ -538,12 +545,8 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                                 formula_val = t_item['val']
                                 if isinstance(formula_val, str) and formula_val.startswith('='):
                                     clean_f = formula_val.replace("{", "").replace("}", "").strip()
-                                    if clean_f not in translator_cache_sht1:
-                                        origin_coord = t_item['col_letter'] + "4"
-                                        translator_cache_sht1[clean_f] = Translator(clean_f, origin=origin_coord)
-                                    translator = translator_cache_sht1[clean_f]
                                     try:
-                                        translated_f = translator.translate_formula(target_cell.coordinate)
+                                        translated_f = fast_shift_formula(clean_f, i)
                                         if (c_idx == 1 or c_idx == 20) and ArrayFormula:
                                             target_cell.value = ArrayFormula(target_cell.coordinate, translated_f)
                                         else:
@@ -1070,7 +1073,7 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                             cell.font = red_font_header if cell.row == 1 else red_font_strike
                         else:
                             cell.border = border
-                            # 请勿覆盖 cell.font，因为这会破坏模板的字体
+                            cell.font = font_style
     
                         if val is None: continue
     
@@ -1251,6 +1254,12 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
 
         save_name = f"{file_prefix}{datetime.now().strftime('%m%d')}.xlsx"
         final_save_path = os.path.join(out_folder, save_name)
+
+        for wb in [wb1, wb_special]:
+            for s in getattr(wb, '_named_styles', []):
+                if getattr(s, 'name', '') == 'Normal':
+                    from openpyxl.styles import Font
+                    s.font = Font(name="微软雅黑", size=10)
 
         progress_callback(0.98, "生成最终报表中...")
         wb1.save(final_save_path)
