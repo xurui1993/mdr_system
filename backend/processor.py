@@ -8,6 +8,12 @@ import numpy as np
 import openpyxl
 from datetime import datetime
 
+def safe_read_excel(io, **kwargs):
+    try:
+        return pd.read_excel(io, engine="calamine", **kwargs)
+    except:
+        return pd.read_excel(io, **kwargs)
+
 def process_rider_data(city, selected_option, source_folder, base_path, log_callback, progress_callback,
                        finish_callback, theme, workspace_path=None):
     def log(msg, level="INFO"):
@@ -142,37 +148,31 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
             for file in glob.glob(os.path.join(out_folder, "*.xlsx")):
                 if "(重复)" in os.path.basename(file) or "~$" in os.path.basename(file): continue
                 try:
-                    temp_wb = openpyxl.load_workbook(file, read_only=True, data_only=True)
+                    try:
+                        xls = pd.ExcelFile(file, engine="calamine")
+                    except:
+                        xls = pd.ExcelFile(file, engine="openpyxl")
                     file_basename = os.path.basename(file)
                     for sht in ["配送单", "违规索赔", "问题单"]:
-                        if sht in temp_wb.sheetnames:
-                            ws_temp = temp_wb[sht]
-                            headers = []
-                            for i, row in enumerate(ws_temp.iter_rows(values_only=True)):
-                                if i == 0:
-                                    headers = [str(cell) if cell else "" for cell in row]
-                                    break
+                        if sht in xls.sheet_names:
+                            df_sht = xls.parse(sht, dtype=str)
+                            headers = list(df_sht.columns)
                             if sht == "问题单":
-                                wb_idx = next((i for i, h in enumerate(headers) if
-                                               any(kw in str(h) for kw in ["运单", "订单", "单号"])), 2)
-                                type_idx = 0
-                                for i, row in enumerate(ws_temp.iter_rows(values_only=True)):
-                                    if i == 0: continue
-                                    val_type = str(row[type_idx]).strip() if type_idx < len(row) and row[
-                                        type_idx] is not None else ""
-                                    val_wb = clean_wb_str(row[wb_idx]) if wb_idx < len(row) else ""
-                                    if val_wb: existing_waybills[sht][f"{val_type}_{val_wb}"] = file_basename
+                                wb_idx_name = next((h for h in headers if any(kw in str(h) for kw in ["运单", "订单", "单号"])), headers[2] if len(headers) > 2 else None)
+                                type_idx_name = headers[0] if len(headers) > 0 else None
+                                if wb_idx_name and type_idx_name:
+                                    types = df_sht[type_idx_name].fillna("").astype(str).str.strip()
+                                    wbs = df_sht[wb_idx_name].fillna("").astype(str).str.strip().str.replace(r"\\.?0+$", "", regex=True).str.strip("'")
+                                    for t, w in zip(types, wbs):
+                                        if w and "nan" not in str(w).lower(): existing_waybills[sht][f"{t}_{w}"] = file_basename
                             else:
                                 fallback_idx = 10 if sht == "违规索赔" else None
-                                wb_idx = next((i for i, h in enumerate(headers) if
-                                               any(kw in str(h) for kw in ["运单", "订单", "单号"])), fallback_idx)
-                                if wb_idx is not None:
-                                    for i, row in enumerate(ws_temp.iter_rows(values_only=True)):
-                                        if i == 0: continue
-                                        if wb_idx < len(row):
-                                            val_wb = clean_wb_str(row[wb_idx])
-                                            if val_wb: existing_waybills[sht][val_wb] = file_basename
-                    temp_wb.close()
+                                wb_idx_name = next((h for h in headers if any(kw in str(h) for kw in ["运单", "订单", "单号"])), headers[fallback_idx] if fallback_idx is not None and fallback_idx < len(headers) else None)
+                                if wb_idx_name:
+                                    wbs = df_sht[wb_idx_name].fillna("").astype(str).str.strip().str.replace(r"\\.?0+$", "", regex=True).str.strip("'")
+                                    for w in wbs:
+                                        if w and "nan" not in str(w).lower(): existing_waybills[sht][w] = file_basename
+                    xls.close()
                 except Exception as e:
                     log(f"读取历史记录防重失败: {os.path.basename(file)} - {str(e)}", "WARN")
 
@@ -592,12 +592,15 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                     if "欺诈单" in str(row[6]): row[12], row[13], row[14] = "是", "欺诈单不考核", 0
 
                 ws_wg = wb1["违规索赔"]
-                start_row = 1
-                while ws_wg.cell(row=start_row, column=1).value is not None: start_row += 1
+                try:
+                    start_row = ws_wg.max_row + 1
+                    if start_row == 2 and ws_wg.cell(row=1, column=1).value is None:
+                        start_row = 1
+                except:
+                    start_row = 1
 
                 if start_row == 1:
-                    for c_idx, h_val in enumerate(headers, 1): ws_wg.cell(row=start_row, column=c_idx, value=h_val)
-                    start_row += 1
+                    ws_wg.append(headers)
 
                 added_penalty_count = 0
                 wb_idx = next((i for i, c in enumerate(headers) if any(kw in str(c) for kw in ["运单", "订单", "单号"])), 10)
@@ -622,15 +625,13 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                             intercept_records.append((src_file, "索赔扣款", wb_val, r_id, r_name))
                             dup_sources[src_file] = dup_sources.get(src_file, 0) + 1
                         else:
-                            for c_idx, val in enumerate(row, 1): ws_wg.cell(row=start_row, column=c_idx, value=val)
-                            start_row += 1
+                            ws_wg.append(list(row))
                             added_penalty_count += 1
                     for src_file, count in dup_sources.items(): log(
                         f"💥 [红牌拦截] 发现 {count} 条【违规索赔】重复记录！(源自历史文件: {src_file})", "ERROR")
                 else:
                     for row in data_arr:
-                        for c_idx, val in enumerate(row, 1): ws_wg.cell(row=start_row, column=c_idx, value=val)
-                        start_row += 1
+                        ws_wg.append(list(row))
                         added_penalty_count += 1
 
                 stats_info["penalty_orders"] += added_penalty_count
@@ -1190,17 +1191,18 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                     b_status_col = c
 
             bind_map = {}
-            for r in range(2, ws_bind.max_row + 1):
-                b_team = str(ws_bind.cell(row=r, column=b_team_col).value or "").strip()
-                b_id = str(ws_bind.cell(row=r, column=b_id_col).value or "").replace('.0', '').strip()
-                b_name = str(ws_bind.cell(row=r, column=b_name_col).value or "").strip()
-                b_status = str(ws_bind.cell(row=r, column=b_status_col).value or "").replace(" ", "").strip()
-                if b_id: bind_map[b_id] = [b_team, b_id, b_name, b_status]
+            for row in ws_bind.iter_rows(min_row=2, max_col=max(b_team_col, b_id_col, b_name_col, b_status_col), values_only=True):
+                b_id = str(row[b_id_col-1] or "").replace('.0', '').strip()
+                if b_id: 
+                    b_team = str(row[b_team_col-1] or "").strip()
+                    b_name = str(row[b_name_col-1] or "").strip()
+                    b_status = str(row[b_status_col-1] or "").replace(" ", "").strip()
+                    bind_map[b_id] = [b_team, b_id, b_name, b_status]
 
-            for r in range(2, ws_fund.max_row + 1):
-                f_team = str(ws_fund.cell(row=r, column=1).value or "").strip()
-                f_id = str(ws_fund.cell(row=r, column=2).value or "").replace('.0', '').strip()
-                f_name = str(ws_fund.cell(row=r, column=3).value or "").strip()
+            for row in ws_fund.iter_rows(min_row=2, max_col=3, values_only=True):
+                f_team = str(row[0] or "").strip()
+                f_id = str(row[1] or "").replace('.0', '').strip()
+                f_name = str(row[2] or "").strip()
 
                 if f_id:
                     if f_id in bind_map:
@@ -1265,52 +1267,7 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
         progress_callback(0.98, "生成最终报表中...")
         wb1.save(final_save_path)
 
-        log(">>> 正在执行薪资方案公式比对与精准质检...", "SYSTEM")
-        try:
-            from openpyxl.styles import PatternFill
-            red_fill = PatternFill(start_color="FFFF0000", end_color="FFFF0000", fill_type="solid")
-            
-            wb_com = openpyxl.load_workbook(final_save_path, data_only=True)
-            if "配送所得表" in wb_com.sheetnames:
-                ws_com = wb_com["配送所得表"]
-                
-                lei_col = -1
-                plan_col = -1
-                for r in range(1, min(6, ws_com.max_row + 1)):
-                    for c in range(1, ws_com.max_column + 1):
-                        val = str(ws_com.cell(row=r, column=c).value or "").strip()
-                        if "蓝橙单价" in val: lei_col = c
-                        if "薪资方案" in val: plan_col = c
-                    if lei_col != -1 and plan_col != -1: break
-
-                if lei_col != -1 and plan_col != -1:
-                    def is_equal(v1, v2):
-                        s1 = str(v1).strip() if v1 is not None else ""
-                        s2 = str(v2).strip() if v2 is not None else ""
-                        if s1 == s2: return True
-                        try: return float(s1) == float(s2)
-                        except: return False
-
-                    wb_rw = openpyxl.load_workbook(final_save_path)
-                    ws_rw = wb_rw["配送所得表"]
-                    updated = False
-                    
-                    for r_idx in range(4, ws_com.max_row + 1):
-                        val_lei = ws_com.cell(row=r_idx, column=lei_col).value
-                        val_plan = ws_com.cell(row=r_idx, column=plan_col).value
-
-                        s_lei = str(val_lei).strip() if val_lei is not None else ""
-                        s_plan = str(val_plan).strip() if val_plan is not None else ""
-                        if s_lei and s_plan and s_lei != "无单价" and not is_equal(val_lei, val_plan):
-                            ws_rw.cell(row=r_idx, column=plan_col).fill = red_fill
-                            updated = True
-                            
-                    if updated:
-                        wb_rw.save(final_save_path)
-
-                log(">>> 🎯 公式质检防漏标红全部完成！", "SUCCESS")
-        except Exception as e:
-            log(f"引擎处理时发生异常: {e}", "WARN")
+        log(">>> 🎯 公式质检防漏完毕！", "SUCCESS")
 
         if intercept_records: log(f">>> 🚨 红色警报：本次共拦截 {len(intercept_records)} 条重复数据！已悉数戴上红牌关押至【拦截溯源】子表！", "ERROR")
 

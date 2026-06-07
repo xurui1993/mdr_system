@@ -110,8 +110,18 @@ sys.stdout.write(path)
 @app.get("/api/default_paths")
 def get_default_paths():
     import os
-    current_dir = os.path.abspath(os.getcwd())
-    parent_dir = os.path.dirname(current_dir)
+    import sys
+    
+    # 获取运行目录
+    if getattr(sys, 'frozen', False):
+        exe_dir = os.path.dirname(sys.executable)
+        parent_dir = os.path.dirname(exe_dir) if os.path.basename(exe_dir).lower() in ['dist', 'build'] else exe_dir
+    else:
+        current_file_dir = os.path.dirname(os.path.abspath(__file__))
+        # backend 目录的上级是工程根目录
+        project_root = os.path.dirname(current_file_dir) if os.path.basename(current_file_dir) == 'backend' else current_file_dir
+        parent_dir = project_root
+        
     config_path = os.path.join(parent_dir, "config.xlsx")
     return {"configPath": config_path, "dataPath": parent_dir}
 
