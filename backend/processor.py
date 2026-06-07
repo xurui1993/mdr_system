@@ -239,6 +239,10 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
 
         total_files = len(files_to_process)
         log(f"寻觅结束，抱回了 {total_files} 个文件袋")
+        has_delivery_fee = any('配送费' in kw_tuple[1] for kw_tuple in files_to_process)
+        if not has_delivery_fee:
+            raise FileNotFoundError("当前数据目录下未检测到包含【配送费】的数据表！请确保目录中含有配送单表后再执行核算。")
+            
         if total_files == 0: log(random.choice(theme['msg_empty']), "WARN")
 
         processed_count = 0
