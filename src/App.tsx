@@ -186,9 +186,29 @@ export default function App() {
 
     let currentConfig = { ...appConfig };
 
-    if (['dev_placeholder', 'remove_problem_orders', 'raise_price', 'overdue_review'].includes(action)) {
+    if (['dev_placeholder', 'overdue_review'].includes(action)) {
       setLogs([{ text: `>>> 🚧 该功能模块前端界面已就绪，正在等待 Python 后端引擎联调中...`, level: 'INFO' }]);
       setTimeout(() => setIsRunning(false), 1500);
+      return;
+    }
+    
+    if (action === 'setup_problem_removal') {
+      try {
+        setLogs([{ text: `>>> 📂 正在拉起目录选择器，请选择工资表和问题单剔除表所在目录...`, level: 'SYSTEM' }]);
+        const response = await fetch('/api/dialog/folder?title=' + encodeURIComponent('选择包含工资表和问题单剔除表的目录'));
+        const data = await response.json();
+        if (data.path) {
+          setAppConfig(prev => ({ ...prev, problemRemovalPath: data.path }));
+          setLogs(prev => [...prev, { text: `>>> ✅ 成功挂载问题单剔除参考目录: ${data.path}`, level: 'SUCCESS' }]);
+          showToast('剔除参考目录已挂载', 'success');
+        } else {
+          setAppConfig(prev => ({ ...prev, enableProblemRemoval: false }));
+          setLogs(prev => [...prev, { text: `>>> ❌ 未选择目录，已自动关闭问题单自动剔除功能。`, level: 'WARN' }]);
+        }
+      } catch (err) {
+        setLogs(prev => [...prev, { text: `>>> ❌ 操作异常: ${err}`, level: 'ERROR' }]);
+      }
+      setIsRunning(false);
       return;
     }
 
@@ -643,7 +663,7 @@ export default function App() {
               </div>
               <div className="flex-[4] min-w-0 glass-panel-immersive rounded-3xl cyber-border flex items-center justify-center p-6 animate-in fade-in slide-in-from-bottom-4 duration-500 delay-100 relative group" style={{ animation: 'glow-pulse 6s infinite ease-in-out' }}>
                 <div className="absolute top-0 right-0 w-[2px] h-full bg-gradient-to-b from-transparent via-sky-400/20 to-transparent opacity-30" />
-                <ActionPanel theme={theme} isRunning={isRunning} onRun={handleRun} progress={progress} />
+                <ActionPanel theme={theme} isRunning={isRunning} onRun={handleRun} progress={progress} onAction={handleAction} />
               </div>
             </section>
           )}
