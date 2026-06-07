@@ -6,6 +6,7 @@ import random
 import pandas as pd
 import numpy as np
 import openpyxl
+import re
 from datetime import datetime
 
 def process_rider_data(city, selected_option, source_folder, base_path, log_callback, progress_callback,
@@ -14,6 +15,17 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
         prefix = {"INFO": "[INFO]", "WARN": "[WARN]", "ERROR": "[ERRO]", "SYSTEM": "[SYS ]", "SUCCESS": "[ OK ]"}.get(
             level, "[INFO]")
         log_callback(f"{prefix} {msg}\n", level)
+
+    # Openpyxl strict illegal character regex
+    ILLEGAL_CHARACTERS_RE = re.compile(r'[\000-\010]|[\013-\014]|[\016-\037]')
+
+    def clean_str_for_excel(val):
+        if pd.isna(val) or val is None:
+            return ""
+        if isinstance(val, str):
+            val = ILLEGAL_CHARACTERS_RE.sub('', val)
+            if len(val) > 32767: val = val[:32767]
+        return val
 
     def clean_wb_str(val):
         if pd.isna(val) or val is None or str(val).strip().lower() == 'nan':
@@ -335,19 +347,19 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
 
                 if "问题单" in wb_name:
                     mask_late = df_source.iloc[:, 0].astype(str).str.contains("不准时单", na=False)
-                    dict2_late.update(df_source.loc[mask_late, df_source.columns[wb_col]].tolist())
+                    dict2_late.update(df_source.iloc[:, wb_col][mask_late].tolist())
 
                 if "配送费" in wb_name:
                     offset = 1 if selected_option == "全职" else 0
                     target_max = 22 + offset
                     while len(df_source.columns) <= target_max: df_source[f"Temp_Col_{len(df_source.columns)}"] = np.nan
-                    col1 = df_source.columns[19 + offset]
-                    col2 = df_source.columns[20 + offset]
-                    col3 = df_source.columns[21 + offset]
-                    df_source[col1] = df_source.iloc[:, wb_col].apply(lambda x: "完成单-不准时" if x in dict2_late else "完成单")
-                    df_source[col2] = pd.to_datetime(df_source.iloc[:, date_col]).dt.dayofweek.apply(
+                    col1_idx = 19 + offset
+                    col2_idx = 20 + offset
+                    col3_idx = 21 + offset
+                    df_source.iloc[:, col1_idx] = df_source.iloc[:, wb_col].apply(lambda x: "完成单-不准时" if x in dict2_late else "完成单")
+                    df_source.iloc[:, col2_idx] = pd.to_datetime(df_source.iloc[:, date_col]).dt.dayofweek.apply(
                         lambda x: "是" if x in [5, 6] else "否")
-                    df_source[col3] = df_source.iloc[:, wb_col].apply(lambda x: "是" if x in dictp_fraud else "否")
+                    df_source.iloc[:, col3_idx] = df_source.iloc[:, wb_col].apply(lambda x: "是" if x in dictp_fraud else "否")
 
                 if match_key != "配送费":
                     col_names = list(df_source.columns)
@@ -367,13 +379,13 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                 else:
                     cols_to_drop.extend(list(range(22, 38)))
                 cols_to_drop = [c for c in cols_to_drop if c < len(df_source.columns)]
-                df_source.drop(df_source.columns[cols_to_drop], axis=1, inplace=True)
+                keep_cols = [i for i in range(len(df_source.columns)) if i not in cols_to_drop]
+                df_source = df_source.iloc[:, keep_cols]
                 df_source = df_source[~df_source.iloc[:, 6].astype(str).str.contains("异常", na=False)]
 
-                wb_col_name = next((c for c in df_source.columns if any(kw in str(c) for kw in ["运单", "订单", "单号"])),
-                                   None)
-                if wb_col_name:
-                    clean_waybills = df_source[wb_col_name].apply(clean_wb_str)
+                wb_col_idx = next((i for i, c in enumerate(df_source.columns) if any(kw in str(c) for kw in ["运单", "订单", "单号"])), None)
+                if wb_col_idx is not None:
+                    clean_waybills = df_source.iloc[:, wb_col_idx].apply(clean_wb_str)
                     mask_dup = clean_waybills.isin(existing_waybills["配送单"].keys())
                     df_dups = df_source[mask_dup].copy()
                     df_source = df_source[~mask_dup].copy()
@@ -381,7 +393,7 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                     if not df_dups.empty:
                         dup_sources = {}
                         for row in df_dups.itertuples(index=False):
-                            wb_val = clean_wb_str(row[wb_col_name])
+                            wb_val = clean_wb_str(row[wb_col_idx])
                             src_file = existing_waybills["配送单"].get(wb_val)
                             if src_file:
                                 r_id = str(row[2]).replace('.0', '').strip() if len(row) > 2 else ""
@@ -391,17 +403,22 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                         for src_file, count in dup_sources.items(): log(
                             f"💥 [红牌拦截] 发现 {count} 条【配送单】重复记录！(源自历史文件: {src_file})", "ERROR")
 
-                for col in df_source.columns:
-                    sample = str(df_source[col].iloc[0]) if not df_source[col].empty else ""
+                for col_idx in range(len(df_source.columns)):
+                    sample = str(df_source.iloc[0, col_idx]) if not df_source.empty else ""
                     if len(sample) < 15:
                         try:
-                            df_source[col] = pd.to_numeric(df_source[col])
+                            df_source.iloc[:, col_idx] = pd.to_numeric(df_source.iloc[:, col_idx])
                         except Exception:
                             pass
 
                 last_col = 17 if selected_option == "全职" else 16
                 df_source = df_source.iloc[:, :last_col + 2]
                 
+                # Apply anti-illegal-char scrub to all string/object columns before outputting
+                for col_idx in range(len(df_source.columns)):
+                    if df_source.iloc[:, col_idx].dtype == object:
+                        df_source.iloc[:, col_idx] = df_source.iloc[:, col_idx].apply(lambda x: clean_str_for_excel(x) if isinstance(x, str) else x)
+
                 headers_sht0 = list(df_source.columns)
                 ws_sht0 = fast_recreate_sheet(wb1, "配送单")
                 ws_sht0.append(headers_sht0)
