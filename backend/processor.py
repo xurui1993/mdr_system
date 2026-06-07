@@ -434,10 +434,10 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                     df_apply_riders = pd.DataFrame({"团队名称": team_ser.values, "骑手ID": id_ser.values, "骑手姓名": name_ser.values})
                     df_apply_riders.columns = df_sht2.columns if len(df_sht2.columns) == 3 else ["团队名称", "骑手ID", "骑手姓名"]
                     
-                    if len(df_sht2.columns) > 1:
-                        # 仅添加 ID 尚未存在于 df_sht2 中的骑手，以避免添加错误的站点
-                        existing_ids = set(df_sht2.iloc[:, 1].astype(str).str.replace('.0', '', regex=False).str.strip())
-                        df_apply_riders = df_apply_riders[~df_apply_riders.iloc[:, 1].astype(str).str.replace('.0', '', regex=False).str.strip().isin(existing_ids)]
+                    if len(df_sht2.columns) > 0:
+                        # 仅保留配送单表团队下的记录
+                        existing_teams = set(df_sht2.iloc[:, 0].astype(str).str.strip())
+                        df_apply_riders = df_apply_riders[df_apply_riders.iloc[:, 0].astype(str).str.strip().isin(existing_teams)]
 
                     df_sht2 = pd.concat([df_sht2, df_apply_riders], ignore_index=True)
                 except Exception as e:
@@ -1060,10 +1060,14 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
 
             # 对所有表格进行全量行高和单元格样式编排
             if ws.title != "配送所得表":
-                for row_idx in range(1, max_r + 1): 
-                    ws.row_dimensions[row_idx].height = 19.5
+                if getattr(ws, 'sheet_format', None):
+                    ws.sheet_format.defaultRowHeight = 19.5
+                    ws.sheet_format.customHeight = True
 
-            iter_max_r = max_r
+            if ws.title == "配送所得表":
+                iter_max_r = 0 # 跳过所得表的慢速单元格遍历，提升效率
+            else:
+                iter_max_r = max_r
                 
             if iter_max_r > 0:
                 for row in ws.iter_rows(min_row=1, max_row=iter_max_r, min_col=1, max_col=max_c):

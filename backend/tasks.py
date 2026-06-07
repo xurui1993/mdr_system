@@ -562,7 +562,9 @@ async def run_summary_parttime_gen(folder, city):
                     max_c = ws.max_column
 
                     ws.freeze_panes = 'A2'
-                    for row_idx in range(1, max_r + 1): ws.row_dimensions[row_idx].height = 19.5
+                    if getattr(ws, 'sheet_format', None):
+                        ws.sheet_format.defaultRowHeight = 19.5
+                        ws.sheet_format.customHeight = True
 
                     for row in ws.iter_rows(min_row=1, max_row=max_r, min_col=1, max_col=max_c):
                         for cell in row:
