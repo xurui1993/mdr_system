@@ -3,20 +3,10 @@ import os
 import glob
 import time
 import random
-import copy
 import pandas as pd
 import numpy as np
 import openpyxl
 from datetime import datetime
-from collections import defaultdict
-from openpyxl.styles import Font, Alignment, Border, Side, PatternFill
-from openpyxl.utils.dataframe import dataframe_to_rows
-from openpyxl.utils import get_column_letter
-from openpyxl.formula.translate import Translator
-try:
-    from openpyxl.formula.array import ArrayFormula
-except ImportError:
-    ArrayFormula = None
 
 def process_rider_data(city, selected_option, source_folder, base_path, log_callback, progress_callback,
                        finish_callback, theme, workspace_path=None):
@@ -77,6 +67,10 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
         start_time = time.time()
         progress_callback(0.02, "召唤系统核心中...")
         log(f">>> {random.choice(theme['msg_start'])}", "SYSTEM")
+
+        from openpyxl.styles import Font, Alignment, Border, Side, PatternFill
+        from openpyxl.utils.dataframe import dataframe_to_rows
+        from openpyxl.utils import get_column_letter
 
         log(f">>> {random.choice(theme['msg_awake'])}", "SYSTEM")
         progress_callback(0.05, "偷瞄极品草料名单...")
@@ -148,27 +142,37 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
             for file in glob.glob(os.path.join(out_folder, "*.xlsx")):
                 if "(重复)" in os.path.basename(file) or "~$" in os.path.basename(file): continue
                 try:
+                    temp_wb = openpyxl.load_workbook(file, read_only=True, data_only=True)
                     file_basename = os.path.basename(file)
                     for sht in ["配送单", "违规索赔", "问题单"]:
-                        try:
-                            df_hist = pd.read_excel(file, sheet_name=sht, dtype=str)
-                            headers = df_hist.columns.tolist()
+                        if sht in temp_wb.sheetnames:
+                            ws_temp = temp_wb[sht]
+                            headers = []
+                            for i, row in enumerate(ws_temp.iter_rows(values_only=True)):
+                                if i == 0:
+                                    headers = [str(cell) if cell else "" for cell in row]
+                                    break
                             if sht == "问题单":
-                                wb_idx = next((c for c in headers if any(kw in str(c) for kw in ["运单", "订单", "单号"])), None)
-                                type_idx = headers[0] if len(headers) > 0 else None
-                                if wb_idx and type_idx:
-                                    for t, w in zip(df_hist[type_idx], df_hist[wb_idx]):
-                                        w_cl = clean_wb_str(w)
-                                        if w_cl: existing_waybills[sht][f"{t}_{w_cl}"] = file_basename
+                                wb_idx = next((i for i, h in enumerate(headers) if
+                                               any(kw in str(h) for kw in ["运单", "订单", "单号"])), 2)
+                                type_idx = 0
+                                for i, row in enumerate(ws_temp.iter_rows(values_only=True)):
+                                    if i == 0: continue
+                                    val_type = str(row[type_idx]).strip() if type_idx < len(row) and row[
+                                        type_idx] is not None else ""
+                                    val_wb = clean_wb_str(row[wb_idx]) if wb_idx < len(row) else ""
+                                    if val_wb: existing_waybills[sht][f"{val_type}_{val_wb}"] = file_basename
                             else:
-                                fallback = headers[10] if (sht == "违规索赔" and len(headers)>10) else None
-                                wb_idx = next((c for c in headers if any(kw in str(c) for kw in ["运单", "订单", "单号"])), fallback)
-                                if wb_idx:
-                                    for w in df_hist[wb_idx]:
-                                        w_cl = clean_wb_str(w)
-                                        if w_cl: existing_waybills[sht][w_cl] = file_basename
-                        except Exception:
-                            pass
+                                fallback_idx = 10 if sht == "违规索赔" else None
+                                wb_idx = next((i for i, h in enumerate(headers) if
+                                               any(kw in str(h) for kw in ["运单", "订单", "单号"])), fallback_idx)
+                                if wb_idx is not None:
+                                    for i, row in enumerate(ws_temp.iter_rows(values_only=True)):
+                                        if i == 0: continue
+                                        if wb_idx < len(row):
+                                            val_wb = clean_wb_str(row[wb_idx])
+                                            if val_wb: existing_waybills[sht][val_wb] = file_basename
+                    temp_wb.close()
                 except Exception as e:
                     log(f"读取历史记录防重失败: {os.path.basename(file)} - {str(e)}", "WARN")
 
@@ -214,6 +218,7 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                 return new_ws
             return wb.create_sheet(title=sheet_name)
             
+        import copy
         ws_apply = fast_recreate_sheet(wb1, "申请名单")
 
         headers_apply = list(df_apply.columns)
@@ -429,6 +434,11 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                     df_apply_riders = pd.DataFrame({"团队名称": team_ser.values, "骑手ID": id_ser.values, "骑手姓名": name_ser.values})
                     df_apply_riders.columns = df_sht2.columns if len(df_sht2.columns) == 3 else ["团队名称", "骑手ID", "骑手姓名"]
                     
+                    if len(df_sht2.columns) > 1:
+                        # 仅添加 ID 尚未存在于 df_sht2 中的骑手，以避免添加错误的站点
+                        existing_ids = set(df_sht2.iloc[:, 1].astype(str).str.replace('.0', '', regex=False).str.strip())
+                        df_apply_riders = df_apply_riders[~df_apply_riders.iloc[:, 1].astype(str).str.replace('.0', '', regex=False).str.strip().isin(existing_ids)]
+
                     df_sht2 = pd.concat([df_sht2, df_apply_riders], ignore_index=True)
                 except Exception as e:
                     log(f"合并申请名单数据失败: {e}", "WARN")
@@ -462,6 +472,8 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                 log(f"-> 🎯 统计完毕：【安全基金】结算骑手共计 {num_riders} 人，总计 {stats_info['orders']} 单！", "INFO")
 
                 if last_row_sht2 > 2:
+                    from openpyxl.formula.translate import Translator
+                    import copy
                     translator_cache_sht2 = {}
                     for col_idx in range(4, ws_sht2.max_column + 1):
                         cell_template = ws_sht2.cell(row=2, column=col_idx)
@@ -480,7 +492,14 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                                     target_cell.value = cell_template.value
                                 if cell_template.has_style: target_cell._style = copy.copy(cell_template._style)
 
+                import copy
+                from openpyxl.formula.translate import Translator
+
                 if num_riders > 0:
+                    try:
+                        from openpyxl.formula.array import ArrayFormula
+                    except ImportError:
+                        ArrayFormula = None
 
                     m_ranges = list(ws_sht1.merged_cells.ranges)
                     for m_range in m_ranges:
@@ -593,13 +612,15 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                             intercept_records.append((src_file, "索赔扣款", wb_val, r_id, r_name))
                             dup_sources[src_file] = dup_sources.get(src_file, 0) + 1
                         else:
-                            ws_wg.append(list(row))
+                            for c_idx, val in enumerate(row, 1): ws_wg.cell(row=start_row, column=c_idx, value=val)
+                            start_row += 1
                             added_penalty_count += 1
                     for src_file, count in dup_sources.items(): log(
                         f"💥 [红牌拦截] 发现 {count} 条【违规索赔】重复记录！(源自历史文件: {src_file})", "ERROR")
                 else:
                     for row in data_arr:
-                        ws_wg.append(list(row))
+                        for c_idx, val in enumerate(row, 1): ws_wg.cell(row=start_row, column=c_idx, value=val)
+                        start_row += 1
                         added_penalty_count += 1
 
                 stats_info["penalty_orders"] += added_penalty_count
@@ -773,6 +794,7 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
         ws_daily.append(headers_abcd)
 
         no_price_records = []
+        from collections import defaultdict
         rider_prices_dict = defaultdict(set)
         rider_price_dates_dict = defaultdict(lambda: defaultdict(list))
 
@@ -809,7 +831,7 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
             full_row = list(row_data) + [count_total, count_comp, count_late, count_fraud, price]
             if price == "无单价": no_price_records.append(full_row)
 
-            rider_key = r_id
+            rider_key = f"{team_name}_{r_id}"
             rider_prices_dict[rider_key].add(str(price))
             rider_price_dates_dict[rider_key][str(price)].append(b_date)
 
@@ -902,8 +924,8 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                                 t_val = str(row[t_col_idx]).replace('nan', '').strip()
                                 i_val = str(row[i_col_idx]).replace('.0', '').replace('nan', '').strip()
                                 s_val = str(row[s_col_idx]).replace('.0', '').replace('nan', '').strip()
-                                if i_val and s_val and s_val != "None":
-                                    key = i_val
+                                if (t_val or i_val) and s_val and s_val != "None":
+                                    key = f"{t_val}_{i_val}"
                                     if key not in history_scheme_map: history_scheme_map[key] = set()
                                     history_scheme_map[key].add(s_val)
                     except Exception as e:
@@ -927,18 +949,14 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                         elif "蓝橙单价" in cell_val:
                             leishen_price_col_idx = c
 
-                noprice_lookup = defaultdict(list)
-                for k, v in grouped.items():
-                    r_id = k[1]
-                    noprice_lookup[r_id].extend(v)
-                noprice_lookup = {k: format_dates_streak(v) + "无单价" for k, v in noprice_lookup.items()}
+                noprice_lookup = {f"{k[0]}_{k[1]}": format_dates_streak(v) + "无单价" for k, v in grouped.items()}
 
                 for row in ws_income_target.iter_rows(min_row=4):
                     team_val = str(row[1].value or "").strip()
                     id_val = str(row[2].value or "").replace('.0', '').strip()
 
-                    if id_val:
-                        lookup_key = id_val
+                    if team_val or id_val:
+                        lookup_key = f"{team_val}_{id_val}"
                         remark_parts = []
                         if lookup_key in noprice_lookup: remark_parts.append(noprice_lookup[lookup_key])
 
@@ -1018,41 +1036,44 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                             bottom=red_border_style)
         red_fill = PatternFill(start_color="FFCCCC", end_color="FFCCCC", fill_type="solid")
 
-        # 模板自带格式的表，绝对不要碰，以防破坏字体格式并节省海量时间
-        template_sheets = ["配送所得表", "安全基金", "申请名单"]
-        # 数据量可能很大的基础数据表
-        raw_sheets = ["配送单", "违规索赔", "问题单", "骑手支付绑定"]
-
         for ws in wb1.worksheets:
-            if ws.title in template_sheets:
-                continue
-                
             max_r = ws.max_row
-            max_c = min(ws.max_column, 50)
-            is_intercept = (ws.title == "拦截溯源")
+            max_c = ws.max_column
+            is_intercept_sheet = (ws.title == "拦截溯源")
+            is_raw_sheet = ws.title not in ["配送所得表", "拦截溯源"]
             
-            ws.freeze_panes = 'A2'
+            if ws.title == "申请名单":
+                ws.freeze_panes = 'A2'
+            elif ws.title != "配送所得表":
+                ws.freeze_panes = 'A2'
 
-            # 仅动态图表或数据表首行做高速格式化
-            iter_max_r = 1 if ws.title in raw_sheets else max_r
-            
+            # 仅设置前 1000 行的高度以节省时间
+            limit_r = min(max_r, 1000) if is_raw_sheet else max_r
+            if ws.title != "配送所得表":
+                for row_idx in range(1, limit_r + 1): 
+                    ws.row_dimensions[row_idx].height = 19.5
+
+            if ws.title == "配送所得表":
+                iter_max_r = 0 # 跳过所得表的慢速单元格遍历
+            elif is_raw_sheet:
+                iter_max_r = limit_r
+            else:
+                iter_max_r = max_r
+                
             if iter_max_r > 0:
                 for row in ws.iter_rows(min_row=1, max_row=iter_max_r, min_col=1, max_col=max_c):
                     for cell in row:
                         val = cell.value
-                        if val is None: continue
-                        
                         cell.alignment = center_align
-                        if is_intercept:
+                        if is_intercept_sheet:
                             cell.border = red_border
                             cell.font = red_font_header if cell.row == 1 else red_font_strike
                         else:
                             cell.border = border
-                            cell.font = font_style
-
-                        if cell.row == 1:
-                            cell.fill = fill_style
-
+                            # 请勿覆盖 cell.font，因为这会破坏模板的字体
+    
+                        if val is None: continue
+    
                         val_type = type(val)
                         if val_type is str:
                             val_str = val.strip()
@@ -1089,7 +1110,7 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                     ws.column_dimensions[col_letter].width = max(11, min(max_length + 3.5, 55))
                     
                 for cell in ws[1]:
-                    if cell.value is not None: cell.fill = red_fill if is_intercept else fill_style
+                    if cell.value is not None: cell.fill = red_fill if is_intercept_sheet else fill_style
 
         ws_income = wb1["配送所得表"]
         date_str = f"{first_date.strftime('%m.%d')}-{last_date.strftime('%m.%d')}"
@@ -1125,6 +1146,7 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
             ws_special_1.sheet_properties.tabColor = "FF9900"
             has_special_data = True
 
+            import copy
             for row in ws_noprice_old.iter_rows(values_only=False):
                 for cell in row:
                     new_cell = ws_special_1.cell(row=cell.row, column=cell.column, value=cell.value)
@@ -1230,14 +1252,56 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
         save_name = f"{file_prefix}{datetime.now().strftime('%m%d')}.xlsx"
         final_save_path = os.path.join(out_folder, save_name)
 
-        log(">>> 正在生成最终大包袱...", "SYSTEM")
-        
         progress_callback(0.98, "生成最终报表中...")
         wb1.save(final_save_path)
 
-        # 薪资公式防漏标红使用 openpyxl 是无效的（新写入公式的 data_only=None）
-        # 改为由业务人员使用 Excel 自身能力核对，省下重复读取历史的 1~2 分钟！
-        log(">>> 🎯 生成完毕！", "SUCCESS")
+        log(">>> 正在执行薪资方案公式比对与精准质检...", "SYSTEM")
+        try:
+            import openpyxl
+            from openpyxl.styles import PatternFill
+            red_fill = PatternFill(start_color="FFFF0000", end_color="FFFF0000", fill_type="solid")
+            
+            wb_com = openpyxl.load_workbook(final_save_path, data_only=True)
+            if "配送所得表" in wb_com.sheetnames:
+                ws_com = wb_com["配送所得表"]
+                
+                lei_col = -1
+                plan_col = -1
+                for r in range(1, min(6, ws_com.max_row + 1)):
+                    for c in range(1, ws_com.max_column + 1):
+                        val = str(ws_com.cell(row=r, column=c).value or "").strip()
+                        if "蓝橙单价" in val: lei_col = c
+                        if "薪资方案" in val: plan_col = c
+                    if lei_col != -1 and plan_col != -1: break
+
+                if lei_col != -1 and plan_col != -1:
+                    def is_equal(v1, v2):
+                        s1 = str(v1).strip() if v1 is not None else ""
+                        s2 = str(v2).strip() if v2 is not None else ""
+                        if s1 == s2: return True
+                        try: return float(s1) == float(s2)
+                        except: return False
+
+                    wb_rw = openpyxl.load_workbook(final_save_path)
+                    ws_rw = wb_rw["配送所得表"]
+                    updated = False
+                    
+                    for r_idx in range(4, ws_com.max_row + 1):
+                        val_lei = ws_com.cell(row=r_idx, column=lei_col).value
+                        val_plan = ws_com.cell(row=r_idx, column=plan_col).value
+
+                        s_lei = str(val_lei).strip() if val_lei is not None else ""
+                        s_plan = str(val_plan).strip() if val_plan is not None else ""
+                        if s_lei and s_plan and s_lei != "无单价" and not is_equal(val_lei, val_plan):
+                            ws_rw.cell(row=r_idx, column=plan_col).fill = red_fill
+                            updated = True
+                            
+                    if updated:
+                        wb_rw.save(final_save_path)
+
+                log(">>> 🎯 公式质检防漏标红全部完成！", "SUCCESS")
+        except Exception as e:
+            log(f"引擎处理时发生异常: {e}", "WARN")
 
         if intercept_records: log(f">>> 🚨 红色警报：本次共拦截 {len(intercept_records)} 条重复数据！已悉数戴上红牌关押至【拦截溯源】子表！", "ERROR")
 
