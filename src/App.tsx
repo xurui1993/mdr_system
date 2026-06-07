@@ -108,17 +108,43 @@ export default function App() {
   const isLoadedRef = React.useRef(false);
 
   useEffect(() => {
-    fetch('/api/config')
+    fetch('/api/default_paths')
       .then(res => res.json())
-      .then(data => {
-        if (data && Object.keys(data).length > 0 && !data.error) {
-          setAppConfig(prev => ({ ...prev, ...data }));
-        }
+      .then(defaultData => {
+        fetch('/api/config')
+          .then(res => res.json())
+          .then(data => {
+            if (data && Object.keys(data).length > 0 && !data.error) {
+              setAppConfig(prev => {
+                let newConfig = { ...prev, ...data };
+                if (newConfig.basePath === '../config.xlsx' || newConfig.basePath === '..') {
+                  newConfig.basePath = defaultData.configPath;
+                }
+                return newConfig;
+              });
+            } else {
+              setAppConfig(prev => {
+                if (prev.basePath === '../config.xlsx' || prev.basePath === '..') {
+                  return { ...prev, basePath: defaultData.configPath };
+                }
+                return prev;
+              });
+            }
+          })
+          .catch(err => {
+            console.error("Failed to load config from backend", err);
+            setAppConfig(prev => {
+              if (prev.basePath === '../config.xlsx' || prev.basePath === '..') {
+                return { ...prev, basePath: defaultData.configPath };
+              }
+              return prev;
+            });
+          })
+          .finally(() => {
+            isLoadedRef.current = true;
+          });
       })
-      .catch(err => console.error("Failed to load config from backend", err))
-      .finally(() => {
-        isLoadedRef.current = true;
-      });
+      .catch(err => console.error("Failed to fetch default paths", err));
   }, []);
 
   useEffect(() => {

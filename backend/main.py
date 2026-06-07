@@ -107,6 +107,14 @@ sys.stdout.write(path)
     except Exception as e:
         return {"path": "", "error": str(e)}
 
+@app.get("/api/default_paths")
+def get_default_paths():
+    import os
+    current_dir = os.path.abspath(os.getcwd())
+    parent_dir = os.path.dirname(current_dir)
+    config_path = os.path.join(parent_dir, "config.xlsx")
+    return {"configPath": config_path}
+
 @app.get("/api/open/config")
 def open_config(path: str):
     if os.path.isfile(path) or str(path).lower().endswith(('.xlsx', '.xls')):

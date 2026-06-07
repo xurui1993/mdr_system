@@ -1257,7 +1257,6 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
 
         log(">>> 正在执行薪资方案公式比对与精准质检...", "SYSTEM")
         try:
-            import openpyxl
             from openpyxl.styles import PatternFill
             red_fill = PatternFill(start_color="FFFF0000", end_color="FFFF0000", fill_type="solid")
             
