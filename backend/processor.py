@@ -15,7 +15,7 @@ def safe_read_excel(io, **kwargs):
         return pd.read_excel(io, **kwargs)
 
 def process_rider_data(city, selected_option, source_folder, base_path, log_callback, progress_callback,
-                       finish_callback, theme, workspace_path=None):
+                       finish_callback, theme, workspace_path=None, enable_interceptor=False):
     def log(msg, level="INFO"):
         prefix = {"INFO": "[INFO]", "WARN": "[WARN]", "ERROR": "[ERRO]", "SYSTEM": "[SYS ]", "SUCCESS": "[ OK ]"}.get(
             level, "[INFO]")
@@ -154,10 +154,11 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
         stats_info["out_folder"] = out_folder
         os.makedirs(out_folder, exist_ok=True)
 
-        log(">>> 翻阅旧账本，防范重复发草料...", "SYSTEM")
         existing_waybills = {"配送单": {}, "违规索赔": {}, "问题单": {}}
-        if os.path.exists(out_folder):
-            for file in glob.glob(os.path.join(out_folder, "*.xlsx")):
+        if enable_interceptor:
+            log(">>> 翻阅旧账本，防范重复发草料 (防重机制已开启)...", "SYSTEM")
+            if os.path.exists(out_folder):
+                for file in glob.glob(os.path.join(out_folder, "*.xlsx")):
                 if "(重复)" in os.path.basename(file) or "~$" in os.path.basename(file): continue
                 try:
                     try:

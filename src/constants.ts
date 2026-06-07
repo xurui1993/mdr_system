@@ -17,7 +17,7 @@ export const THEMES: Theme[] = [
   {
     name: "Aegis", runner: "▰", target: "▰",
     spin_frames: ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"],
-    icon: "🧮", title: "AEGIS 薪资核算中枢", logo: "薪资组内部系统", sub: "",
+    icon: "🧮", title: "AEGIS 薪资核算中枢", logo: "核算内部系统", sub: "",
     kite: "◈",
     term_head: "系统运行日志 // 实时监控", log_init: "AEGIS 引擎已初始化。准备接受任务指令...\n",
     footer: "系统状态: 最佳 // 上行链路加密",

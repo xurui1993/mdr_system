@@ -42,6 +42,7 @@ export interface AppConfig {
   cycles: string[];
   issueCycles?: string[];
   issueSelectedCities?: string[];
+  enableInterceptor?: boolean;
 }
 
 export interface LogEntry {

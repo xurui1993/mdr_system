@@ -29,6 +29,7 @@ class ConfigRequest(BaseModel):
     targetPath: str = None
     theme: dict = None
     issueSelectedCities: list[str] = None
+    enableInterceptor: bool = False
 
 CONFIG_FILE = ".aegis_config.json"
 
@@ -214,6 +215,12 @@ async def run_calculation(config: ConfigRequest):
                 yield event
             return
 
+        elif config.action == 'salary_bind':
+            import salary_bind_processor
+            async for event in salary_bind_processor.run_salary_bind_gen(config.sourcePath):
+                yield event
+            return
+
         else:
             
             # 默认的主计算流程
@@ -223,7 +230,8 @@ async def run_calculation(config: ConfigRequest):
                 config.sourcePath, 
                 config.basePath, 
                 config.theme,
-                config.workspacePath
+                config.workspacePath,
+                config.enableInterceptor
             ):
                 yield event
             return

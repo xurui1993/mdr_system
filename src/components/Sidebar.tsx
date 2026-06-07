@@ -11,6 +11,7 @@ interface SidebarProps {
 
 export function Sidebar({ theme, activeMenu, onSelectMenu, isRunning }: SidebarProps) {
   const MENU_ITEMS = [
+    { id: 'dashboard', icon: '◱', label: '首页看板' },
     { id: 'core', icon: '✦', label: '兼职薪资核算' },
     { id: 'issue_orders', icon: '▤', label: '问题单生成' },
     { id: 'parttime_details', icon: '◈', label: '兼职核算记录' },
@@ -80,14 +81,14 @@ export function Sidebar({ theme, activeMenu, onSelectMenu, isRunning }: SidebarP
 
       {/* Menus */}
       <div className="flex-1 px-4 overflow-y-auto pb-6">
-        <div className="space-y-2 mt-2">
+        <div className="space-y-1 mt-2">
           {MENU_ITEMS.map(item => (
             <motion.button
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.96 }}
               key={item.id}
               onClick={() => onSelectMenu(item.id)}
-              className={`w-full flex items-center px-5 py-4 rounded-xl transition-all duration-300 text-[15px] font-medium tracking-wider relative overflow-hidden group ${
+              className={`w-full flex items-center px-5 py-3 rounded-xl transition-all duration-300 text-[15px] font-medium tracking-wider relative overflow-hidden group ${
                 activeMenu === item.id 
                   ? 'bg-gradient-to-r from-sky-500/20 to-transparent border-l-2 border-sky-400 text-sky-100 shadow-[inset_0px_0px_20px_rgba(56,189,248,0.05)]' 
                   : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50 border-l-2 border-transparent'

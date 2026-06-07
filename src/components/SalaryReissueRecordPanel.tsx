@@ -2,7 +2,7 @@ import React, { useState, useMemo, useRef } from 'react';
 import { Theme, AppConfig } from '../types';
 import { Search, Download, Upload, ChevronDown, Plus, Edit2, Trash2, Check, X } from 'lucide-react';
 
-interface ParttimeDetailsPanelProps {
+interface SalaryReissueRecordPanelProps {
   theme: Theme;
   config: AppConfig;
   isRunning: boolean;
@@ -10,7 +10,7 @@ interface ParttimeDetailsPanelProps {
   onBrowseFolder: () => void;
 }
 
-export function ParttimeDetailsPanel({ theme, config, isRunning }: ParttimeDetailsPanelProps) {
+export function SalaryReissueRecordPanel({ theme, config, isRunning }: SalaryReissueRecordPanelProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCity, setSelectedCity] = useState('');
   const [selectedMonth, setSelectedMonth] = useState('');
@@ -20,11 +20,8 @@ export function ParttimeDetailsPanel({ theme, config, isRunning }: ParttimeDetai
   
   // Mock data for the table
   const [data, setData] = useState([
-    { id: 1, month: '2026-05', approvalNum: 'AP-202605-001', city: '深圳', site: '南山中心', riderId: 'R-10023', name: '张三', phone: '13800138000', orders: 156, amount: 1250.50, cycle: '6.01-6.15', settlementType: '半月结', type: '兼职', status: '已核算' },
-    { id: 2, month: '2026-05', approvalNum: 'AP-202605-002', city: '深圳', site: '福田北', riderId: 'R-10045', name: '李四', phone: '13900139000', orders: 142, amount: 1180.00, cycle: '6.01-6.07', settlementType: '周结', type: '众包', status: '待发放' },
-    { id: 3, month: '2026-05', approvalNum: 'AP-202605-003', city: '保定', site: '定州站', riderId: 'R-10102', name: '王五', phone: '13700137000', orders: 89, amount: 654.20, cycle: '6.01-6.30', settlementType: '月结', type: '兼职', status: '异常' },
-    { id: 4, month: '2026-05', approvalNum: 'AP-202605-004', city: '上海', site: '浦东核心', riderId: 'R-20011', name: '赵六', phone: '13600136000', orders: 201, amount: 1820.80, cycle: '6.01-6.01', settlementType: '日结', type: '众包', status: '已核算' },
-    { id: 5, month: '2026-05', approvalNum: 'AP-202605-005', city: '广州', site: '天河一站', riderId: 'R-30055', name: '孙七', phone: '13500135000', orders: 120, amount: 960.00, cycle: '6.01-6.15', settlementType: '半月结', type: '兼职', status: '待发放' },
+    { id: 1, month: '2026-05', approvalNum: 'SR-202605-001', city: '深圳', site: '南山中心', riderId: 'R-10023', name: '张三', phone: '13800138000', orders: 0, amount: 250.00, cycle: '补发单', settlementType: '其他', type: '补发', status: '已补发' },
+    { id: 2, month: '2026-05', approvalNum: 'SR-202605-002', city: '北京', site: '朝阳东', riderId: 'R-10088', name: '王安', phone: '13900139088', orders: 0, amount: 150.00, cycle: '补发单', settlementType: '其他', type: '补发', status: '待审核' },
   ]);
 
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -79,7 +76,7 @@ export function ParttimeDetailsPanel({ theme, config, isRunning }: ParttimeDetai
 
   const handleAdd = () => {
     const newRecord = {
-      id: -1, month: '2026-06', approvalNum: 'AP-NEW', city: '未知', site: '未知', riderId: 'R-', name: '', phone: '', orders: 0, amount: 0, cycle: '', settlementType: '月结', type: '兼职', status: '待发放'
+      id: -1, month: '2026-06', approvalNum: 'SR-NEW', city: '未知', site: '未知', riderId: 'R-', name: '', phone: '', orders: 0, amount: 0, cycle: '补发单', settlementType: '其他', type: '补发', status: '待审核'
     };
     setEditingId(-1);
     setEditForm(newRecord);
@@ -88,16 +85,16 @@ export function ParttimeDetailsPanel({ theme, config, isRunning }: ParttimeDetai
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleExport = () => {
-    const headers = ['核算月份', '核算单号', '城市', '站点', '骑手ID', '骑手姓名', '核算单量', '结算金额', '状态'];
+    const headers = ['业务月份', '补发单号', '城市', '站点', '骑手ID', '骑手姓名', '补发金额', '补发类别', '状态'];
     const csvContent = [
       headers.join(','),
-      ...data.map(item => [item.month, item.approvalNum, item.city, item.site, item.riderId, item.name, item.orders, item.amount, item.status].join(','))
+      ...data.map(item => [item.month, item.approvalNum, item.city, item.site, item.riderId, item.name, item.amount, item.type, item.status].join(','))
     ].join('\n');
     
     const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
-    link.download = `兼职核算记录_${Date.now()}.csv`;
+    link.download = `薪资补发记录_${Date.now()}.csv`;
     link.click();
   };
 
@@ -115,17 +112,17 @@ export function ParttimeDetailsPanel({ theme, config, isRunning }: ParttimeDetai
         return {
           id: Date.now() + index,
           month: cols[0] || '2026-06',
-          approvalNum: cols[1] || `AP-IMP-${Date.now().toString().slice(-4)}`,
+          approvalNum: cols[1] || `SR-IMP-${Date.now().toString().slice(-4)}`,
           city: cols[2] || '未知',
           site: cols[3] || '未知',
           riderId: cols[4] || 'R-00000',
-          name: cols[5] || '未知姓名',
-          orders: Number(cols[6]) || 0,
-          amount: Number(cols[7]) || 0,
-          cycle: '',
-          settlementType: '月结',
-          type: '兼职',
-          status: cols[8] || '待发放'
+          name: cols[5] || '未知',
+          orders: 0,
+          amount: Number(cols[6]) || 0,
+          cycle: '补发单',
+          settlementType: '其他',
+          type: cols[7] || '补发',
+          status: cols[8] || '待审核'
         };
       });
       setData(prev => [...newRecords, ...prev]);
@@ -143,8 +140,8 @@ export function ParttimeDetailsPanel({ theme, config, isRunning }: ParttimeDetai
         {/* Header & Filters */}
         <div className="flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
-            <span className="text-[24px] drop-shadow-md filter text-sky-400">◈</span>
-            <h2 className="text-[20px] font-bold text-sky-100 tracking-wide">兼职核算记录</h2>
+            <span className="text-[24px] drop-shadow-md filter text-sky-400">◬</span>
+            <h2 className="text-[20px] font-bold text-sky-100 tracking-wide">薪资补发记录</h2>
           </div>
           
           <div className="flex items-center gap-3">
@@ -241,14 +238,14 @@ export function ParttimeDetailsPanel({ theme, config, isRunning }: ParttimeDetai
           <table className="w-full text-left border-collapse text-[13px] whitespace-nowrap">
             <thead className="sticky top-0 bg-slate-800/90 backdrop-blur-md border-b border-white/10 z-10">
               <tr>
-                <th className="px-4 py-4 font-medium text-slate-400">结算月份</th>
-                <th className="px-4 py-4 font-medium text-slate-400">核算审批编号</th>
+                <th className="px-4 py-4 font-medium text-slate-400">补发月份</th>
+                <th className="px-4 py-4 font-medium text-slate-400">补发审批编号</th>
                 <th className="px-4 py-4 font-medium text-slate-400">业务城市</th>
                 <th className="px-4 py-4 font-medium text-slate-400">站点名称</th>
                 <th className="px-4 py-4 font-medium text-slate-400">骑手ID</th>
                 <th className="px-4 py-4 font-medium text-slate-400">骑手姓名</th>
-                <th className="px-4 py-4 font-medium text-slate-400 text-right">核算单量</th>
-                <th className="px-4 py-4 font-medium text-slate-400 text-right">结算金额(元)</th>
+                <th className="px-4 py-4 font-medium text-slate-400 text-right">补发金额(元)</th>
+                <th className="px-4 py-4 font-medium text-slate-400">补发类别</th>
                 <th className="px-4 py-4 font-medium text-slate-400 text-center">状态</th>
                 <th className="px-4 py-4 font-medium text-slate-400 text-center min-w-[100px]">操作</th>
               </tr>
@@ -262,8 +259,8 @@ export function ParttimeDetailsPanel({ theme, config, isRunning }: ParttimeDetai
                   <td className="px-4 py-3"><input type="text" className="w-20 bg-slate-900/50 border border-sky-500/30 rounded px-2 py-1 text-sky-100 placeholder:text-slate-500" value={editForm.site} onChange={e => setEditForm({...editForm, site: e.target.value})} /></td>
                   <td className="px-4 py-3"><input type="text" className="w-20 bg-slate-900/50 border border-sky-500/30 rounded px-2 py-1 text-sky-100 placeholder:text-slate-500" value={editForm.riderId} onChange={e => setEditForm({...editForm, riderId: e.target.value})} /></td>
                   <td className="px-4 py-3"><input type="text" className="w-16 bg-slate-900/50 border border-sky-500/30 rounded px-2 py-1 text-sky-100 placeholder:text-slate-500" value={editForm.name} onChange={e => setEditForm({...editForm, name: e.target.value})} /></td>
-                  <td className="px-4 py-3 text-right"><input type="number" className="w-16 bg-slate-900/50 border border-sky-500/30 rounded px-2 py-1 text-sky-100 placeholder:text-slate-500 text-right" value={editForm.orders} onChange={e => setEditForm({...editForm, orders: Number(e.target.value)})} /></td>
                   <td className="px-4 py-3 text-right"><input type="number" className="w-20 bg-slate-900/50 border border-sky-500/30 rounded px-2 py-1 text-sky-100 placeholder:text-slate-500 text-right" value={editForm.amount} onChange={e => setEditForm({...editForm, amount: Number(e.target.value)})} /></td>
+                  <td className="px-4 py-3"><input type="text" className="w-16 bg-slate-900/50 border border-sky-500/30 rounded px-2 py-1 text-sky-100 placeholder:text-slate-500" value={editForm.type} onChange={e => setEditForm({...editForm, type: e.target.value})} /></td>
                   <td className="px-4 py-3"><input type="text" className="w-16 bg-slate-900/50 border border-sky-500/30 rounded px-2 py-1 text-sky-100 placeholder:text-slate-500 mx-auto block" value={editForm.status} onChange={e => setEditForm({...editForm, status: e.target.value})} /></td>
                   <td className="px-4 py-3 flex justify-center gap-2">
                     <button onClick={handleSave} className="p-1 text-green-400 hover:bg-green-400/10 rounded transition-colors" title="保存"><Check className="w-4 h-4" /></button>
@@ -282,8 +279,8 @@ export function ParttimeDetailsPanel({ theme, config, isRunning }: ParttimeDetai
                         <td className="px-4 py-3"><input type="text" className="w-20 bg-slate-900/50 border border-sky-500/30 rounded px-2 py-1 text-sky-100" value={editForm.site} onChange={e => setEditForm({...editForm, site: e.target.value})} /></td>
                         <td className="px-4 py-3"><input type="text" className="w-20 bg-slate-900/50 border border-sky-500/30 rounded px-2 py-1 text-sky-100" value={editForm.riderId} onChange={e => setEditForm({...editForm, riderId: e.target.value})} /></td>
                         <td className="px-4 py-3"><input type="text" className="w-16 bg-slate-900/50 border border-sky-500/30 rounded px-2 py-1 text-sky-100" value={editForm.name} onChange={e => setEditForm({...editForm, name: e.target.value})} /></td>
-                        <td className="px-4 py-3 text-right"><input type="number" className="w-16 bg-slate-900/50 border border-sky-500/30 rounded px-2 py-1 text-sky-100 text-right" value={editForm.orders} onChange={e => setEditForm({...editForm, orders: Number(e.target.value)})} /></td>
                         <td className="px-4 py-3 text-right"><input type="number" className="w-20 bg-slate-900/50 border border-sky-500/30 rounded px-2 py-1 text-sky-100 text-right" value={editForm.amount} onChange={e => setEditForm({...editForm, amount: Number(e.target.value)})} /></td>
+                        <td className="px-4 py-3"><input type="text" className="w-16 bg-slate-900/50 border border-sky-500/30 rounded px-2 py-1 text-sky-100" value={editForm.type} onChange={e => setEditForm({...editForm, type: e.target.value})} /></td>
                         <td className="px-4 py-3"><input type="text" className="w-16 bg-slate-900/50 border border-sky-500/30 rounded px-2 py-1 text-sky-100 mx-auto block" value={editForm.status} onChange={e => setEditForm({...editForm, status: e.target.value})} /></td>
                         <td className="px-4 py-3 flex justify-center gap-2">
                           <button onClick={handleSave} className="p-1 text-green-400 hover:bg-green-400/10 rounded transition-colors" title="保存"><Check className="w-4 h-4" /></button>
@@ -298,11 +295,11 @@ export function ParttimeDetailsPanel({ theme, config, isRunning }: ParttimeDetai
                         <td className="px-4 py-4 text-slate-300">{row.site}</td>
                         <td className="px-4 py-4 font-mono text-slate-400">{row.riderId}</td>
                         <td className="px-4 py-4 font-medium text-sky-100">{row.name}</td>
-                        <td className="px-4 py-4 text-right font-mono text-sky-200">{row.orders}</td>
                         <td className="px-4 py-4 text-right font-mono text-sky-300">¥ {row.amount.toFixed(2)}</td>
+                        <td className="px-4 py-4 text-slate-300">{row.type}</td>
                         <td className="px-4 py-4 flex justify-center">
                           <span className={`inline-flex items-center px-2 py-1 rounded-md text-[11px] font-medium border ${
-                            row.status === '已核算' ? 'bg-sky-500/10 text-sky-400 border-sky-500/20' :
+                            row.status === '已补发' ? 'bg-sky-500/10 text-sky-400 border-sky-500/20' :
                             row.status === '异常' ? 'bg-red-500/10 text-red-400 border-red-500/20' :
                             'bg-amber-500/10 text-amber-400 border-amber-500/20'
                           }`}>
@@ -340,6 +337,7 @@ export function ParttimeDetailsPanel({ theme, config, isRunning }: ParttimeDetai
           </div>
         </div>
       </div>
+
       {deleteConfirmId !== null && (
         <div className="absolute inset-0 z-50 flex items-center justify-center bg-slate-950/60 backdrop-blur-sm">
           <div className="bg-slate-900 border border-sky-500/30 p-6 rounded-2xl shadow-2xl max-w-sm w-full mx-4">
@@ -365,5 +363,3 @@ export function ParttimeDetailsPanel({ theme, config, isRunning }: ParttimeDetai
     </div>
   );
 }
-
-

@@ -607,7 +607,7 @@ async def run_summary_parttime_gen(folder, city):
         yield create_log_event(f"合并报表时出现意外: {e}", "ERROR")
         yield create_finish_event("error", str(e))
 
-async def run_main_calculation_gen(city, selected_option, source_folder, base_path, theme, workspace_path=None):
+async def run_main_calculation_gen(city, selected_option, source_folder, base_path, theme, workspace_path=None, enable_interceptor=False):
     import sys
     import os
     import threading
@@ -636,7 +636,7 @@ async def run_main_calculation_gen(city, selected_option, source_folder, base_pa
         
     def worker():
         try:
-            process_rider_data(city, selected_option, source_folder, base_path, log_cb, progress_cb, finish_cb, theme, workspace_path=workspace_path)
+            process_rider_data(city, selected_option, source_folder, base_path, log_cb, progress_cb, finish_cb, theme, workspace_path=workspace_path, enable_interceptor=enable_interceptor)
         except Exception as e:
             finish_cb("error", str(e))
 

@@ -18,9 +18,6 @@ export function DateRangeCyclePicker({ cycles, currentCycle, startDate, endDate,
   const [tempEnd, setTempEnd] = useState(endDate);
   const [currentMonth, setCurrentMonth] = useState(new Date());
 
-  const [isEditingCycles, setIsEditingCycles] = useState(false);
-  const [newCycle, setNewCycle] = useState('');
-
   useEffect(() => {
     setTempStart(startDate);
     setTempEnd(endDate);
@@ -131,22 +128,6 @@ export function DateRangeCyclePicker({ cycles, currentCycle, startDate, endDate,
     }
   };
 
-  const handleCycleAdd = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter' && newCycle.trim()) {
-      if (!cycles.includes(newCycle.trim())) {
-        onUpdateCycles([...cycles, newCycle.trim()]);
-      }
-      setNewCycle('');
-      setIsEditingCycles(false);
-    }
-  };
-
-  const handleCycleRemove = (e: React.MouseEvent, cycleToRemove: string) => {
-    e.stopPropagation();
-    const nextCycles = cycles.filter(c => c !== cycleToRemove);
-    onUpdateCycles(nextCycles);
-  };
-
   const calendarDays = generateCalendar();
   const weekDays = ['一', '二', '三', '四', '五', '六', '日'];
 
@@ -178,41 +159,14 @@ export function DateRangeCyclePicker({ cycles, currentCycle, startDate, endDate,
             <div className="text-[12px] text-sky-200/60 mb-2 font-mono tracking-widest uppercase">快捷选择</div>
             <div className="flex flex-col gap-1.5 overflow-y-auto max-h-[220px] custom-scrollbar pr-1">
               {cycles.map(c => (
-                <div key={c} className="group relative">
-                  <button
-                    onClick={() => handleCycleSelect(c)}
-                    className={`w-full text-left px-3 py-2 text-[14px] transition-all rounded-lg font-medium tracking-wide ${currentCycle === c ? 'bg-sky-500/30 text-white shadow-[inset_0_0_12px_rgba(14,165,233,0.5)] border border-sky-400/50' : 'text-slate-300 hover:text-white hover:bg-sky-500/20 border border-transparent'}`}
-                  >
-                    {c}
-                  </button>
-                  <button 
-                    onClick={(e) => handleCycleRemove(e, c)} 
-                    className="absolute p-1 top-1/2 -translate-y-1/2 right-1.5 w-5 h-5 bg-red-500/80 hover:bg-red-500 text-white rounded-full text-[10px] flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all z-10 leading-none shadow-md"
-                  >
-                    ✕
-                  </button>
-                </div>
-              ))}
-            </div>
-            <div className="pt-2 mt-auto border-t border-sky-500/20">
-              {isEditingCycles ? (
-                <input
-                  autoFocus
-                  value={newCycle}
-                  onChange={e => setNewCycle(e.target.value)}
-                  onKeyDown={handleCycleAdd}
-                  onBlur={() => { setIsEditingCycles(false); setNewCycle(''); }}
-                  className="w-full bg-slate-900/60 text-sky-100 px-3 py-2 text-[13px] rounded outline-none border border-sky-500/50 focus:border-sky-400 shadow-inner"
-                  placeholder="输入并回车"
-                />
-              ) : (
-                <button 
-                  onClick={() => setIsEditingCycles(true)} 
-                  className="w-full text-center px-3 py-2 text-[13px] text-sky-400/80 hover:text-sky-300 hover:bg-sky-500/20 rounded-lg transition-colors border border-dashed border-sky-500/30 font-medium"
+                <button
+                  key={c}
+                  onClick={() => handleCycleSelect(c)}
+                  className={`w-full text-left px-3 py-2 text-[14px] transition-all rounded-lg font-medium tracking-wide ${currentCycle === c ? 'bg-sky-500/30 text-white shadow-[inset_0_0_12px_rgba(14,165,233,0.5)] border border-sky-400/50' : 'text-slate-300 hover:text-white hover:bg-sky-500/20 border border-transparent'}`}
                 >
-                  + 添加周期
+                  {c}
                 </button>
-              )}
+              ))}
             </div>
           </div>
 

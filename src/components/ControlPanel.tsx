@@ -185,6 +185,47 @@ export function ControlPanel({ theme, config, onChangeConfig, onAction }: Contro
         </button>
       </div>
 
+      {/* Row 4: Toggles */}
+      <div className="flex items-center gap-6 relative z-10 pt-2 border-t border-sky-500/10">
+        <label className="flex items-center gap-2 cursor-pointer group">
+          <div className="relative">
+            <input 
+              type="checkbox" 
+              checked={config.enableInterceptor ?? true} 
+              onChange={e => updateConfig('enableInterceptor', e.target.checked)}
+              className="sr-only" 
+            />
+            <div className={`w-10 h-5 rounded-full transition-colors ${config.enableInterceptor !== false ? 'bg-sky-500' : 'bg-slate-700'}`} />
+            <div className={`absolute left-1 top-1 w-3 h-3 bg-white rounded-full transition-transform ${config.enableInterceptor !== false ? 'translate-x-5' : 'translate-x-0'}`} />
+          </div>
+          <span className="text-[14px] text-slate-300 font-medium tracking-wide group-hover:text-sky-300 transition-colors">防重打款拦截（自动剔除已打款名单）</span>
+        </label>
+        
+        <label className="flex items-center gap-2 cursor-pointer group">
+          <div className="relative">
+            <input 
+              type="checkbox" 
+              checked={config.issueSelectedCities && config.issueSelectedCities.includes(config.city)} 
+              onChange={e => {
+                const checked = e.target.checked;
+                const nextIssueCities = config.issueSelectedCities ? [...config.issueSelectedCities] : [];
+                if (checked && !nextIssueCities.includes(config.city)) {
+                  nextIssueCities.push(config.city);
+                } else if (!checked) {
+                  const idx = nextIssueCities.indexOf(config.city);
+                  if (idx > -1) nextIssueCities.splice(idx, 1);
+                }
+                updateConfig('issueSelectedCities', nextIssueCities);
+              }}
+              className="sr-only" 
+            />
+            <div className={`w-10 h-5 rounded-full transition-colors ${config.issueSelectedCities?.includes(config.city) ? 'bg-sky-500' : 'bg-slate-700'}`} />
+            <div className={`absolute left-1 top-1 w-3 h-3 bg-white rounded-full transition-transform ${config.issueSelectedCities?.includes(config.city) ? 'translate-x-5' : 'translate-x-0'}`} />
+          </div>
+          <span className="text-[14px] text-slate-300 font-medium tracking-wide group-hover:text-sky-300 transition-colors">开启问题单自动剔除</span>
+        </label>
+      </div>
+
     </div>
   );
 }

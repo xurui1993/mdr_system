@@ -68,11 +68,20 @@ const getLocalToday = () => {
 };
 
 import { ParttimeDetailsPanel } from './components/ParttimeDetailsPanel';
+import { SalaryReissueRecordPanel } from './components/SalaryReissueRecordPanel';
+import { ReferralInternalRecordPanel } from './components/ReferralInternalRecordPanel';
+import { ReferralFieldRecordPanel } from './components/ReferralFieldRecordPanel';
+import { SalaryBindActionPanel } from './components/SalaryBindActionPanel';
+import { SalaryBindControlPanel } from './components/SalaryBindControlPanel';
+import { AbnormalResignationControlPanel } from './components/AbnormalResignationControlPanel';
+import { AbnormalResignationActionPanel } from './components/AbnormalResignationActionPanel';
+
+import { DashboardPanel } from './components/DashboardPanel';
 
 export default function App() {
   const theme = THEMES[0];
   
-  const [activeMenu, setActiveMenu] = useState('core');
+  const [activeMenu, setActiveMenu] = useState('dashboard');
   const [isRunning, setIsRunning] = useState(false);
   const [progress, setProgress] = useState(0);
   const [logs, setLogs] = useState<LogEntry[]>([{ text: theme.log_init, level: 'INFO' }]);
@@ -376,6 +385,33 @@ export default function App() {
       return;
     }
 
+    if (action === 'salary_bind') {
+      try {
+        if (!appConfig.sourcePath || appConfig.sourcePath === './data' || appConfig.sourcePath === '.') {
+          setLogs([{ text: `>>> 📂 正在拉起目录选择器，请选择包含待处理发薪支付数据的文件夹...`, level: 'SYSTEM' }]);
+          
+          const dialogEndpoint = '/api/dialog/folder?title=' + encodeURIComponent('选择包含待处理发薪支付数据的文件夹目录');
+          const response = await fetch(dialogEndpoint);
+          const data = await response.json();
+          if (data.path) {
+            currentConfig = { ...currentConfig, action: 'salary_bind', sourcePath: data.path };
+            setLogs(prev => [...prev, { text: `>>> ✅ 成功读取目录: ${data.path} ，任务装载完毕，开始执行发薪绑定！`, level: 'SUCCESS' }]);
+          } else {
+            const errorMsg = data.error ? ` (系统异常: ${data.error})` : '';
+            setLogs(prev => [...prev, { text: `>>> ❌ 未选择目标目录，操作已安全终止。${errorMsg}`, level: 'WARN' }]);
+            setIsRunning(false);
+            return;
+          }
+        } else {
+          currentConfig = { ...currentConfig, action: 'salary_bind' };
+        }
+      } catch (err) {
+        setLogs(prev => [...prev, { text: `>>> ❌ 弹窗拉起失败 (请确认 Python 后端服务是否正常启动): ${err}`, level: 'ERROR' }]);
+        setIsRunning(false);
+        return;
+      }
+    }
+
     let targetPath = '';
     if (action === 'raise_price' || action === 'remove_problem_orders') {
         // Handled above, currentConfig has targetPath
@@ -593,6 +629,12 @@ export default function App() {
 
         <main className="flex-1 flex flex-col p-8 pb-4 gap-6 w-full max-w-[1600px] mx-auto min-h-0">
           
+          {activeMenu === 'dashboard' && (
+            <div className="flex-1 min-h-0 animate-in fade-in slide-in-from-bottom-4 duration-500">
+              <DashboardPanel theme={theme} />
+            </div>
+          )}
+
           {/* Top Section: Controls & Action Block */}
           {activeMenu === 'core' && (
             <section className="flex gap-8 flex-shrink-0 mb-2">
@@ -618,21 +660,78 @@ export default function App() {
               </div>
               <div className="flex-[4] min-w-0 glass-panel-immersive rounded-3xl cyber-border flex items-center justify-center p-8 animate-in fade-in slide-in-from-bottom-4 duration-500 delay-100 relative group" style={{ animation: 'glow-pulse 6s infinite ease-in-out' }}>
                 <div className="absolute top-0 right-0 w-[2px] h-full bg-gradient-to-b from-transparent via-sky-400/20 to-transparent opacity-30" />
-                <IssueOrderActionPanel theme={theme} isRunning={isRunning} onRun={handleRun} progress={progress} />
+                <IssueOrderActionPanel theme={theme} isRunning={isRunning} onRun={() => handleAction('dev_placeholder')} progress={progress} />
               </div>
             </section>
           )}
 
-          {!['core', 'issue_orders'].includes(activeMenu) && (
-            <section className="flex gap-8 flex-shrink-0 mb-2">
-              <div className="w-full min-w-0 h-[256px] animate-in fade-in slide-in-from-bottom-4 duration-500">
+          {activeMenu === 'salary_bind' && (
+            <section className="flex gap-8 flex-shrink-0 mb-2 relative z-50">
+              <div className="flex-[6] min-w-0 max-w-[850px] animate-in fade-in slide-in-from-bottom-4 duration-500 relative z-50 h-[256px]">
+                <SalaryBindControlPanel 
+                  theme={theme}
+                  config={appConfig}
+                  onChangeConfig={setAppConfig}
+                  onAction={handleAction}
+                />
+              </div>
+              <div className="flex-[4] min-w-0 glass-panel-immersive rounded-3xl cyber-border flex items-center justify-center p-8 animate-in fade-in slide-in-from-bottom-4 duration-500 delay-100 relative group h-[256px]" style={{ animation: 'glow-pulse 6s infinite ease-in-out' }}>
+                <div className="absolute top-0 right-0 w-[2px] h-full bg-gradient-to-b from-transparent via-sky-400/20 to-transparent opacity-30" />
+                <SalaryBindActionPanel theme={theme} isRunning={isRunning} onRun={() => handleAction('salary_bind')} progress={progress} />
+              </div>
+            </section>
+          )}
+
+          {activeMenu === 'abnormal_resignation' && (
+            <section className="flex gap-8 flex-shrink-0 mb-2 relative z-50">
+              <div className="flex-[6] min-w-0 max-w-[850px] animate-in fade-in slide-in-from-bottom-4 duration-500 relative z-50 h-[256px]">
+                <AbnormalResignationControlPanel 
+                  theme={theme}
+                  config={appConfig}
+                  onChangeConfig={setAppConfig}
+                />
+              </div>
+              <div className="flex-[4] min-w-0 glass-panel-immersive rounded-3xl cyber-border flex items-center justify-center p-8 animate-in fade-in slide-in-from-bottom-4 duration-500 delay-100 relative group h-[256px]" style={{ animation: 'glow-pulse 6s infinite ease-in-out' }}>
+                <div className="absolute top-0 right-0 w-[2px] h-full bg-gradient-to-b from-transparent via-sky-400/20 to-transparent opacity-30" />
+                <AbnormalResignationActionPanel theme={theme} isRunning={isRunning} onRun={() => handleAction('dev_placeholder')} progress={progress} />
+              </div>
+            </section>
+          )}
+
+          {!['dashboard', 'core', 'issue_orders', 'salary_bind', 'abnormal_resignation'].includes(activeMenu) && (
+            <section className={`flex gap-8 w-full ${['parttime_details', 'salary_reissue', 'referral_internal', 'referral_field'].includes(activeMenu) ? 'flex-1 min-h-0' : 'flex-shrink-0 mb-2'}`}>
+              <div className={`w-full min-w-0 animate-in fade-in slide-in-from-bottom-4 duration-500 ${['parttime_details', 'salary_reissue', 'referral_internal', 'referral_field'].includes(activeMenu) ? 'h-full' : 'h-[256px]'}`}>
                 {activeMenu === 'parttime_details' ? (
                   <ParttimeDetailsPanel 
                     theme={theme}
                     config={appConfig}
                     isRunning={isRunning}
-                    onRun={() => handleAction('summary_parttime_btn')}
-                    onBrowseFolder={() => handleAction('summary_parttime_browse')}
+                    onRun={() => handleAction('dev_placeholder')}
+                    onBrowseFolder={() => handleAction('dev_placeholder')}
+                  />
+                ) : activeMenu === 'salary_reissue' ? (
+                  <SalaryReissueRecordPanel 
+                    theme={theme}
+                    config={appConfig}
+                    isRunning={isRunning}
+                    onRun={() => handleAction('dev_placeholder')}
+                    onBrowseFolder={() => handleAction('dev_placeholder')}
+                  />
+                ) : activeMenu === 'referral_internal' ? (
+                  <ReferralInternalRecordPanel 
+                    theme={theme}
+                    config={appConfig}
+                    isRunning={isRunning}
+                    onRun={() => handleAction('dev_placeholder')}
+                    onBrowseFolder={() => handleAction('dev_placeholder')}
+                  />
+                ) : activeMenu === 'referral_field' ? (
+                  <ReferralFieldRecordPanel 
+                    theme={theme}
+                    config={appConfig}
+                    isRunning={isRunning}
+                    onRun={() => handleAction('dev_placeholder')}
+                    onBrowseFolder={() => handleAction('dev_placeholder')}
                   />
                 ) : (
                   <GenericToolPanel 
@@ -640,21 +739,9 @@ export default function App() {
                     actionId={activeMenu}
                     isRunning={isRunning}
                     onRun={() => handleAction('dev_placeholder')}
-                    title={
-                      activeMenu === 'salary_reissue' ? '薪资补发记录' :
-                      activeMenu === 'salary_bind' ? '发薪工具绑定' :
-                      activeMenu === 'referral_internal' ? '内推发放记录' :
-                      activeMenu === 'referral_field' ? '地推发放记录' :
-                      activeMenu === 'abnormal_resignation' ? '异常离职流程' : '模块开发中'
-                    }
+                    title="模块开发中"
                     description="当前业务模块正在拼命研发中，即将上线，敬请期待后端引擎组装完成。"
-                    icon={
-                      activeMenu === 'salary_reissue' ? '◬' :
-                      activeMenu === 'salary_bind' ? '◎' :
-                      activeMenu === 'referral_internal' ? '⊞' :
-                      activeMenu === 'referral_field' ? '◉' :
-                      activeMenu === 'abnormal_resignation' ? '⚠' : '✨'
-                    }
+                    icon="✨"
                   />
                 )}
               </div>
@@ -662,7 +749,8 @@ export default function App() {
           )}
 
           {/* Bottom Section: Terminal & Files */}
-          <section className="flex-1 glass-panel-immersive rounded-[20px] cyber-border flex flex-col overflow-hidden min-h-0 animate-in fade-in slide-in-from-bottom-4 duration-500 delay-200 relative z-0" style={{ animation: 'glow-pulse 8s infinite ease-in-out' }}>
+          {!['dashboard', 'parttime_details', 'salary_reissue', 'referral_internal', 'referral_field'].includes(activeMenu) && (
+            <section className="flex-1 glass-panel-immersive rounded-[20px] cyber-border flex flex-col overflow-hidden min-h-0 animate-in fade-in slide-in-from-bottom-4 duration-500 delay-200 relative z-0" style={{ animation: 'glow-pulse 8s infinite ease-in-out' }}>
             
             <div className="flex items-center justify-between px-8 pt-6 pb-4 shrink-0 border-b border-sky-500/10">
               <div className="flex items-center gap-6">
@@ -673,28 +761,6 @@ export default function App() {
                   </div>
                   <span className="text-transparent bg-clip-text bg-gradient-to-r from-sky-100 to-sky-400 font-mono font-black text-[15px] tracking-[0.2em] uppercase relative top-[1px] drop-shadow-[0_0_8px_rgba(56,189,248,0.5)] animate-pulse">{theme.term_head}</span>
                 </div>
-                
-                {/* Extended Action Buttons Here */}
-                {activeMenu !== 'issue_orders' && (
-                  <div className="flex items-center gap-1 border-l border-sky-500/20 pl-3 md:pl-5 relative ml-1 md:ml-3">
-                    <button onClick={() => handleAction('remove_problem_orders')} className="text-slate-400 hover:text-sky-300 transition-colors text-[14px] flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg border border-transparent hover:border-sky-500/30 hover:bg-sky-500/10 group/btn h-[36px]">
-                      <span className="text-[16px] text-sky-400/80 group-hover/btn:text-sky-300 group-hover/btn:scale-110 transition-transform">◬</span>
-                      <span className="font-medium tracking-wide whitespace-nowrap">问题单剔除</span>
-                    </button>
-                    <button onClick={() => handleAction('raise_price')} className="text-slate-400 hover:text-sky-300 transition-colors text-[14px] flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg border border-transparent hover:border-sky-500/30 hover:bg-sky-500/10 group/btn h-[36px]">
-                      <span className="text-[16px] text-sky-400/80 group-hover/btn:text-sky-300 group-hover/btn:scale-110 transition-transform">⇡</span>
-                      <span className="font-medium tracking-wide whitespace-nowrap">蓝橙提审</span>
-                    </button>
-                    <button onClick={() => handleAction('overdue_review')} className="text-slate-400 hover:text-sky-300 transition-colors text-[14px] flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg border border-transparent hover:border-sky-500/30 hover:bg-sky-500/10 group/btn h-[36px]">
-                      <span className="text-[16px] text-sky-400/80 group-hover/btn:text-sky-300 group-hover/btn:scale-110 transition-transform">⏱</span>
-                      <span className="font-medium tracking-wide whitespace-nowrap">超期待处理</span>
-                    </button>
-                    <button onClick={() => handleAction('summary_parttime')} className="text-slate-400 hover:text-sky-300 transition-colors text-[14px] flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg border border-transparent hover:border-sky-500/30 hover:bg-sky-500/10 group/btn h-[36px]">
-                      <span className="text-[16px] text-sky-400/80 group-hover/btn:text-sky-300 group-hover/btn:scale-110 transition-transform">▤</span>
-                      <span className="font-medium tracking-wide whitespace-nowrap">兼职汇总</span>
-                    </button>
-                  </div>
-                )}
               </div>
               <div className="flex items-center gap-3 h-[40px]">
                 <button onClick={() => handleAction("add_task_root")} title="挂载新的数据源" className="w-[40px] h-[40px] flex items-center justify-center glass-input hover:bg-sky-500/20 hover:text-sky-300 hover:border-sky-500/50 text-slate-400 rounded-xl transition-all text-[20px] font-bold shadow appearance-none">+</button>
@@ -714,6 +780,7 @@ export default function App() {
             </div>
             
           </section>
+          )}
 
         </main>
       </div>
