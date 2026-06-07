@@ -89,7 +89,7 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
         price_mapping_id = {}
         price_mapping_name = {}
 
-        if os.path.isfile(base_path):
+        if os.path.isfile(base_path) or str(base_path).lower().endswith(('.xlsx', '.xls')):
             main_wb_path = base_path
             base_dir = os.path.dirname(base_path)
         else:

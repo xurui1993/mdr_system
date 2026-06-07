@@ -83,7 +83,7 @@ export default function App() {
       city: '深圳',
       cycle: '日结',
       issueCycle: '今天',
-      basePath: '..',
+      basePath: '../config.xlsx',
       sourcePath: './data',
       workspacePath: '',
       cities: ["深圳", "北京", "天津", "大连", "保定", "广州", "上海"],

@@ -109,7 +109,7 @@ sys.stdout.write(path)
 
 @app.get("/api/open/config")
 def open_config(path: str):
-    if os.path.isfile(path):
+    if os.path.isfile(path) or str(path).lower().endswith(('.xlsx', '.xls')):
         config_file = path
     else:
         config_file = os.path.join(path, "config.xlsx")
