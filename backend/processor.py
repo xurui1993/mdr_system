@@ -1114,11 +1114,13 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                     is_header = (row_idx == 1)
                     target_style = "ns_strike" if is_intercept_sheet and not is_header else "ns_normal"
                     for col_idx, cell in enumerate(row, 1):
-                        current_style = target_style
-                        if not is_header and is_apply_sheet and col_idx in [4, 5]:
-                            current_style = "ns_date"
-                            
-                        cell.style = current_style
+                        if ws.title != "配送所得表":
+                            current_style = target_style
+                            if not is_header and is_apply_sheet and col_idx in [4, 5]:
+                                current_style = "ns_date"
+                                
+                            cell.style = current_style
+
                         if is_intercept_sheet and is_header:
                             cell.font = red_font_header
 
@@ -1126,6 +1128,9 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                         if val is None: continue
 
                         if not is_header and not (is_apply_sheet and col_idx in [4, 5]):
+                            if ws.title == "配送所得表" and row_idx < 4:
+                                continue
+                            
                             val_type = type(val)
                             if val_type is str:
                                 val_str = val.strip()
@@ -1144,8 +1149,9 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                             elif val_type is int:
                                 cell.number_format = '0'
 
+            min_row_for_width = 4 if ws.title == "配送所得表" else 1
             max_lengths = [0] * max_c
-            for row_val in ws.iter_rows(min_row=1, max_row=min(2000, max_r), min_col=1, max_col=max_c, values_only=True):
+            for row_val in ws.iter_rows(min_row=min_row_for_width, max_row=min(2000, max_r), min_col=1, max_col=max_c, values_only=True):
                 for idx, val in enumerate(row_val):
                     if val is not None:
                         val_str = str(val)
@@ -1156,10 +1162,14 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
             
             for col_idx, max_length in enumerate(max_lengths, 1):
                 col_letter = get_column_letter(col_idx)
-                ws.column_dimensions[col_letter].width = max(11, min(max_length * 1.2 + 3.0, 65))
+                if max_length > 0:
+                    ws.column_dimensions[col_letter].width = max(11, min(max_length * 1.2 + 3.0, 65))
+                elif ws.title != "配送所得表":
+                    ws.column_dimensions[col_letter].width = 11
                 
-            for cell in ws[1]:
-                if cell.value is not None: cell.fill = red_fill if is_intercept_sheet else fill_style
+            if ws.title != "配送所得表":
+                for cell in ws[1]:
+                    if cell.value is not None: cell.fill = red_fill if is_intercept_sheet else fill_style
 
         ws_income = wb1["配送所得表"]
         date_str = f"{first_date.strftime('%m.%d')}-{last_date.strftime('%m.%d')}"
