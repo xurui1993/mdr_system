@@ -117,30 +117,28 @@ export default function App() {
             if (data && Object.keys(data).length > 0 && !data.error) {
               setAppConfig(prev => {
                 let newConfig = { ...prev, ...data };
-                // 强制将带有 dist 的路径或者旧的默认路径重置为正确的工程同级目录
-                if (newConfig.basePath === '../config.xlsx' || newConfig.basePath === '..' || newConfig.basePath.match(/[\\/]dist[\\/]config\.xlsx$/i)) {
+                if (newConfig.basePath === '../config.xlsx' || newConfig.basePath === '..') {
                   newConfig.basePath = defaultData.configPath;
-                }
-                if (newConfig.sourcePath === './data' || newConfig.sourcePath.match(/[\\/]dist[\\/]data$/i) || newConfig.sourcePath.match(/[\\/]三亚$/i)) {
-                  newConfig.sourcePath = defaultData.dataPath;
                 }
                 return newConfig;
               });
             } else {
               setAppConfig(prev => {
-                let newConfig = { ...prev };
-                if (newConfig.basePath === '../config.xlsx' || newConfig.basePath === '..') {
-                  newConfig.basePath = defaultData.configPath;
+                if (prev.basePath === '../config.xlsx' || prev.basePath === '..') {
+                  return { ...prev, basePath: defaultData.configPath };
                 }
-                if (newConfig.sourcePath === './data') {
-                  newConfig.sourcePath = defaultData.dataPath;
-                }
-                return newConfig;
+                return prev;
               });
             }
           })
           .catch(err => {
             console.error("Failed to load config from backend", err);
+            setAppConfig(prev => {
+              if (prev.basePath === '../config.xlsx' || prev.basePath === '..') {
+                return { ...prev, basePath: defaultData.configPath };
+              }
+              return prev;
+            });
           })
           .finally(() => {
             isLoadedRef.current = true;

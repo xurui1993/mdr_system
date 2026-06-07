@@ -472,44 +472,30 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                 log(f"-> 🎯 统计完毕：【安全基金】结算骑手共计 {num_riders} 人，总计 {stats_info['orders']} 单！", "INFO")
 
                 if last_row_sht2 > 2:
-                    import re
+                    from openpyxl.formula.translate import Translator
                     import copy
-                    formula_regex = re.compile(r'(?<![a-zA-Z0-9_])(\$?)([a-zA-Z]{1,3})(\$?)([1-9][0-9]{0,6})(?![a-zA-Z0-9_])')
-                    
-                    def fast_shift(clean_f, delta):
-                        if not clean_f or delta == 0: return clean_f
-                        def replacer(match):
-                            c_abs, c, r_abs, r = match.groups()
-                            if r_abs == '$': return match.group(0)
-                            return f"{c_abs}{c}{r_abs}{int(r) + delta}"
-                        return formula_regex.sub(replacer, clean_f)
-
+                    translator_cache_sht2 = {}
                     for col_idx in range(4, ws_sht2.max_column + 1):
                         cell_template = ws_sht2.cell(row=2, column=col_idx)
-                        if cell_template.value and isinstance(cell_template.value, str) and cell_template.value.startswith('='):
+                        if cell_template.value and isinstance(cell_template.value,
+                                                              str) and cell_template.value.startswith('='):
                             clean_f = cell_template.value
+                            if clean_f not in translator_cache_sht2:
+                                translator_cache_sht2[clean_f] = Translator(clean_f, origin=cell_template.coordinate)
+                            translator = translator_cache_sht2[clean_f]
                             for row_idx in range(3, last_row_sht2 + 1):
                                 target_cell = ws_sht2.cell(row=row_idx, column=col_idx)
-                                delta = row_idx - 2
                                 try:
-                                    target_cell.value = fast_shift(clean_f, delta)
+                                    translated_f = translator.translate_formula(target_cell.coordinate)
+                                    target_cell.value = translated_f
                                 except Exception:
                                     target_cell.value = cell_template.value
                                 if cell_template.has_style: target_cell._style = copy.copy(cell_template._style)
 
                 import copy
+                from openpyxl.formula.translate import Translator
 
                 if num_riders > 0:
-                    import re
-                    formula_regex = re.compile(r'(?<![a-zA-Z0-9_])(\$?)([a-zA-Z]{1,3})(\$?)([1-9][0-9]{0,6})(?![a-zA-Z0-9_])')
-                    def fast_shift(clean_f, delta):
-                        if not clean_f or delta == 0: return clean_f
-                        def replacer(match):
-                            c_abs, c, r_abs, r = match.groups()
-                            if r_abs == '$': return match.group(0)
-                            return f"{c_abs}{c}{r_abs}{int(r) + delta}"
-                        return formula_regex.sub(replacer, clean_f)
-
                     try:
                         from openpyxl.formula.array import ArrayFormula
                     except ImportError:
@@ -534,6 +520,7 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                             'col_letter': get_column_letter(c_idx)
                         })
 
+                    translator_cache_sht1 = {}
                     for i in range(num_riders):
                         t_row = i + 4
                         for c_idx, t_item in enumerate(template_row_info, 1):
@@ -551,11 +538,14 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                                 formula_val = t_item['val']
                                 if isinstance(formula_val, str) and formula_val.startswith('='):
                                     clean_f = formula_val.replace("{", "").replace("}", "").strip()
-                                    delta = t_row - 4
+                                    if clean_f not in translator_cache_sht1:
+                                        origin_coord = t_item['col_letter'] + "4"
+                                        translator_cache_sht1[clean_f] = Translator(clean_f, origin=origin_coord)
+                                    translator = translator_cache_sht1[clean_f]
                                     try:
-                                        translated_f = fast_shift(clean_f, delta)
-                                        if (c_idx == 1 or c_idx == 20) and formula_val.startswith("{"):
-                                            target_cell.value = ArrayFormula(target_cell.coordinate, translated_f) if ArrayFormula else translated_f
+                                        translated_f = translator.translate_formula(target_cell.coordinate)
+                                        if (c_idx == 1 or c_idx == 20) and ArrayFormula:
+                                            target_cell.value = ArrayFormula(target_cell.coordinate, translated_f)
                                         else:
                                             target_cell.value = translated_f
                                     except:

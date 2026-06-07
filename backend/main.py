@@ -113,7 +113,7 @@ def get_default_paths():
     current_dir = os.path.abspath(os.getcwd())
     parent_dir = os.path.dirname(current_dir)
     config_path = os.path.join(parent_dir, "config.xlsx")
-    return {"configPath": config_path, "dataPath": parent_dir}
+    return {"configPath": config_path}
 
 @app.get("/api/open/config")
 def open_config(path: str):
