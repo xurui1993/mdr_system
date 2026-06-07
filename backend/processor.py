@@ -399,8 +399,9 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                     stats_info["orders"] += len(df_source)
                     if not df_dups.empty:
                         dup_sources = {}
+                        wb_col_idx = df_dups.columns.get_loc(wb_col_name)
                         for row in df_dups.itertuples(index=False):
-                            wb_val = clean_wb_str(row[wb_col_name])
+                            wb_val = clean_wb_str(row[wb_col_idx])
                             src_file = existing_waybills["配送单"].get(wb_val)
                             if src_file:
                                 r_id = str(row[2]).replace('.0', '').strip() if len(row) > 2 else ""
@@ -417,9 +418,6 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                             df_source[col] = pd.to_numeric(df_source[col])
                         except Exception:
                             pass
-
-                cols_to_remove = [c for c in df_source.columns if str(c).startswith("Temp_Col_") or c in ["订单标签", "捡货补贴", "国补采集补贴", "国补机收补贴", "主站大网", "开放大网指派"]]
-                if cols_to_remove: df_source.drop(columns=cols_to_remove, inplace=True)
 
                 headers_sht0 = list(df_source.columns)
                 ws_sht0 = fast_recreate_sheet(wb1, "配送单")
@@ -699,9 +697,6 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                             dup_sources[src_file] = dup_sources.get(src_file, 0) + 1
                     for src_file, count in dup_sources.items(): log(
                         f"💥 [红牌拦截] 发现 {count} 条【问题单】重复记录！(源自历史文件: {src_file})", "ERROR")
-
-                cols_to_remove = [c for c in df_source.columns if str(c).startswith("Temp_Col_")]
-                if cols_to_remove: df_source.drop(columns=cols_to_remove, inplace=True)
 
                 headers_wtd = list(df_source.columns)
                 ws_wtd = fast_recreate_sheet(wb1, "问题单")
@@ -1056,25 +1051,35 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
         ns_normal.border = border
         ns_normal.alignment = center_align
 
+        ns_date = NamedStyle(name="ns_date")
+        ns_date.font = font_style
+        ns_date.border = border
+        ns_date.alignment = center_align
+        ns_date.number_format = 'yyyy/mm/dd'
+
         ns_strike = NamedStyle(name="ns_strike")
         ns_strike.font = red_font_strike
         ns_strike.border = red_border
         ns_strike.alignment = center_align
 
-        for ns in [ns_normal, ns_strike]:
+        for ns in [ns_normal, ns_date, ns_strike]:
             if ns.name not in wb1.named_styles:
                 try: wb1.add_named_style(ns)
                 except Exception: pass
 
         for ws in wb1.worksheets:
+            for col_idx in range(ws.max_column, 0, -1):
+                col_val = str(ws.cell(row=1, column=col_idx).value or "")
+                if col_val.startswith("Temp_Col_") or col_val in ["订单标签", "捡货补贴", "国补采集补贴", "国补机收补贴", "主站大网", "开放大网指派"]:
+                    ws.delete_cols(col_idx)
+
+        for ws in wb1.worksheets:
             max_r = ws.max_row
             max_c = ws.max_column
             is_intercept_sheet = (ws.title == "拦截溯源")
-            is_raw_sheet = ws.title not in ["配送所得表", "拦截溯源"]
+            is_apply_sheet = (ws.title == "申请名单")
             
-            if ws.title == "申请名单":
-                ws.freeze_panes = 'A2'
-            elif ws.title != "配送所得表":
+            if is_apply_sheet or ws.title != "配送所得表":
                 ws.freeze_panes = 'A2'
 
             # 对所有表格进行全量行高编排
@@ -1092,37 +1097,18 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                 for row_idx, row in enumerate(ws.iter_rows(min_row=1, max_row=iter_max_r, min_col=1, max_col=max_c), 1):
                     is_header = (row_idx == 1)
                     target_style = "ns_strike" if is_intercept_sheet and not is_header else "ns_normal"
-                    for cell in row:
-                        val = cell.value
-                        cell.style = target_style
+                    for col_idx, cell in enumerate(row, 1):
+                        current_style = target_style
+                        if not is_header and is_apply_sheet and col_idx in [4, 5]:
+                            current_style = "ns_date"
+                            
+                        cell.style = current_style
                         if is_intercept_sheet and is_header:
                             cell.font = red_font_header
-    
-                        if val is None: continue
-    
-                        val_type = type(val)
-                        if val_type is str:
-                            val_str = val.strip()
-                            if val_str.isdigit():
-                                if len(val_str) < 15:
-                                    cell.value = int(val_str)
-                                    cell.number_format = '0'
-                                else:
-                                    cell.number_format = '@'
-                            elif len(val_str) >= 15:
-                                cell.number_format = '@'
-                        elif val_type is float:
-                            if cell.number_format not in ['yyyy/mm/dd', 'yyyy/m/d', 'm/d/yy', '@']:
-                                if val.is_integer():
-                                    cell.number_format = '0'
-                                else:
-                                    cell.number_format = '0.00'
-                        elif val_type is int:
-                            if cell.number_format not in ['yyyy/mm/dd', 'yyyy/m/d', 'm/d/yy', '@']: cell.number_format = '0'
 
             if ws.title != "配送所得表":
                 max_lengths = [0] * max_c
-                for row_val in ws.iter_rows(min_row=1, max_row=min(1000, max_r), min_col=1, max_col=max_c, values_only=True):
+                for row_val in ws.iter_rows(min_row=1, max_row=min(2000, max_r), min_col=1, max_col=max_c, values_only=True):
                     for idx, val in enumerate(row_val):
                         if val is not None:
                             val_str = str(val)
@@ -1133,7 +1119,7 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                 
                 for col_idx, max_length in enumerate(max_lengths, 1):
                     col_letter = get_column_letter(col_idx)
-                    ws.column_dimensions[col_letter].width = max(11, min(max_length + 3.5, 55))
+                    ws.column_dimensions[col_letter].width = max(11, min(max_length * 1.2 + 3.0, 65))
                     
                 for cell in ws[1]:
                     if cell.value is not None: cell.fill = red_fill if is_intercept_sheet else fill_style
