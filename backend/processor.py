@@ -418,6 +418,9 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                         except Exception:
                             pass
 
+                cols_to_remove = [c for c in df_source.columns if str(c).startswith("Temp_Col_") or c in ["订单标签", "捡货补贴", "国补采集补贴", "国补机收补贴", "主站大网", "开放大网指派"]]
+                if cols_to_remove: df_source.drop(columns=cols_to_remove, inplace=True)
+
                 headers_sht0 = list(df_source.columns)
                 ws_sht0 = fast_recreate_sheet(wb1, "配送单")
                 ws_sht0.append(headers_sht0)
@@ -426,7 +429,10 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                 
                 last_col = 17 if selected_option == "全职" else 16
                 headers = ["运单状态", "是否周末", "是否欺诈单"]
-                for i, h in enumerate(headers): ws_sht0.cell(row=1, column=last_col + i, value=h)
+                try:
+                    for i, h in enumerate(headers): ws_sht0.cell(row=1, column=last_col + i, value=h)
+                except Exception:
+                    pass
 
                 if len(df_source) > 0 and len(df_source.columns) >= 4:
                     df_sht2 = df_source.iloc[:, 1:4].copy()
@@ -585,13 +591,13 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                         row[14] = float(row[4] or 0)
                     if "欺诈单" in str(row[6]): row[12], row[13], row[14] = "是", "欺诈单不考核", 0
 
-                ws_wg = wb1["违规索赔"]
-                try:
-                    start_row = ws_wg.max_row + 1
-                    if start_row == 2 and ws_wg.cell(row=1, column=1).value is None:
-                        start_row = 1
-                except:
+                if not getattr(wb1, 'has_cleared_wg', False):
+                    ws_wg = fast_recreate_sheet(wb1, "违规索赔")
+                    wb1.has_cleared_wg = True
                     start_row = 1
+                else:
+                    ws_wg = wb1["违规索赔"]
+                    start_row = 2 
 
                 if start_row == 1:
                     ws_wg.append(headers)
@@ -693,6 +699,9 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                             dup_sources[src_file] = dup_sources.get(src_file, 0) + 1
                     for src_file, count in dup_sources.items(): log(
                         f"💥 [红牌拦截] 发现 {count} 条【问题单】重复记录！(源自历史文件: {src_file})", "ERROR")
+
+                cols_to_remove = [c for c in df_source.columns if str(c).startswith("Temp_Col_")]
+                if cols_to_remove: df_source.drop(columns=cols_to_remove, inplace=True)
 
                 headers_wtd = list(df_source.columns)
                 ws_wtd = fast_recreate_sheet(wb1, "问题单")
@@ -1040,6 +1049,22 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
         red_border = Border(left=red_border_style, right=red_border_style, top=red_border_style,
                             bottom=red_border_style)
         red_fill = PatternFill(start_color="FFCCCC", end_color="FFCCCC", fill_type="solid")
+        
+        from openpyxl.styles import NamedStyle
+        ns_normal = NamedStyle(name="ns_normal")
+        ns_normal.font = font_style
+        ns_normal.border = border
+        ns_normal.alignment = center_align
+
+        ns_strike = NamedStyle(name="ns_strike")
+        ns_strike.font = red_font_strike
+        ns_strike.border = red_border
+        ns_strike.alignment = center_align
+
+        for ns in [ns_normal, ns_strike]:
+            if ns.name not in wb1.named_styles:
+                try: wb1.add_named_style(ns)
+                except Exception: pass
 
         for ws in wb1.worksheets:
             max_r = ws.max_row
@@ -1052,7 +1077,7 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
             elif ws.title != "配送所得表":
                 ws.freeze_panes = 'A2'
 
-            # 对所有表格进行全量行高和单元格样式编排
+            # 对所有表格进行全量行高编排
             if ws.title != "配送所得表":
                 if getattr(ws, 'sheet_format', None):
                     ws.sheet_format.defaultRowHeight = 19.5
@@ -1064,16 +1089,14 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                 iter_max_r = max_r
                 
             if iter_max_r > 0:
-                for row in ws.iter_rows(min_row=1, max_row=iter_max_r, min_col=1, max_col=max_c):
+                for row_idx, row in enumerate(ws.iter_rows(min_row=1, max_row=iter_max_r, min_col=1, max_col=max_c), 1):
+                    is_header = (row_idx == 1)
+                    target_style = "ns_strike" if is_intercept_sheet and not is_header else "ns_normal"
                     for cell in row:
                         val = cell.value
-                        cell.alignment = center_align
-                        if is_intercept_sheet:
-                            cell.border = red_border
-                            cell.font = red_font_header if cell.row == 1 else red_font_strike
-                        else:
-                            cell.border = border
-                            cell.font = font_style
+                        cell.style = target_style
+                        if is_intercept_sheet and is_header:
+                            cell.font = red_font_header
     
                         if val is None: continue
     
