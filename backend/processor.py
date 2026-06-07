@@ -436,13 +436,15 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
 
                 df_sht2.replace(r'^\s*$', np.nan, regex=True, inplace=True)
                 if len(df_sht2.columns) > 1:
-                    df_sht2.iloc[:, 1] = df_sht2.iloc[:, 1].astype(str).str.replace('.0', '', regex=False).str.strip()
-                    df_sht2.iloc[:, 1] = df_sht2.iloc[:, 1].replace(r'^\s*$', np.nan, regex=True).replace("nan", np.nan).replace("None", np.nan)
-                    df_sht2.iloc[:, 1] = df_sht2.iloc[:, 1].replace("", np.nan)
-                    df_sht2.dropna(subset=[df_sht2.columns[1]], inplace=True)
+                    rider_id_col = df_sht2.columns[1]
+                    s_id = df_sht2[rider_id_col].astype(str).str.replace('.0', '', regex=False).str.strip()
+                    s_id = s_id.replace(r'^\s*$', np.nan, regex=True).replace("nan", np.nan).replace("None", np.nan)
+                    s_id = s_id.replace("", np.nan)
+                    df_sht2[rider_id_col] = s_id
+                    df_sht2.dropna(subset=[rider_id_col], inplace=True)
                     # 重新转换为数字以在输出 Excel 中保留数字类型
                     try:
-                        df_sht2.iloc[:, 1] = pd.to_numeric(df_sht2.iloc[:, 1])
+                        df_sht2[rider_id_col] = pd.to_numeric(df_sht2[rider_id_col])
                     except:
                         pass
                 df_sht2.drop_duplicates(subset=[df_sht2.columns[0], df_sht2.columns[1]], keep='first', inplace=True)
@@ -1269,6 +1271,7 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
         progress_callback(1.00, "收工，准备下班~")
         finish_callback("success", final_save_path, stats_info)
     except Exception as e:
-        log(f"哎呀！运行过程中出了个小意外: {str(e)}", "ERROR")
+        import traceback
+        log(f"哎呀！运行过程中出了个小意外: {str(e)}\n{traceback.format_exc()}", "ERROR")
         progress_callback(0, "被未知力量打断")
         finish_callback("error", str(e), None)
