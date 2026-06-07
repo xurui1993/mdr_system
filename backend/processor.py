@@ -8,12 +8,6 @@ import numpy as np
 import openpyxl
 from datetime import datetime
 
-def safe_read_excel(io, **kwargs):
-    try:
-        return pd.read_excel(io, engine="calamine", **kwargs)
-    except:
-        return pd.read_excel(io, **kwargs)
-
 def process_rider_data(city, selected_option, source_folder, base_path, log_callback, progress_callback,
                        finish_callback, theme, workspace_path=None):
     def log(msg, level="INFO"):
@@ -148,31 +142,37 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
             for file in glob.glob(os.path.join(out_folder, "*.xlsx")):
                 if "(重复)" in os.path.basename(file) or "~$" in os.path.basename(file): continue
                 try:
-                    try:
-                        xls = pd.ExcelFile(file, engine="calamine")
-                    except:
-                        xls = pd.ExcelFile(file, engine="openpyxl")
+                    temp_wb = openpyxl.load_workbook(file, read_only=True, data_only=True)
                     file_basename = os.path.basename(file)
                     for sht in ["配送单", "违规索赔", "问题单"]:
-                        if sht in xls.sheet_names:
-                            df_sht = xls.parse(sht, dtype=str)
-                            headers = list(df_sht.columns)
+                        if sht in temp_wb.sheetnames:
+                            ws_temp = temp_wb[sht]
+                            headers = []
+                            for i, row in enumerate(ws_temp.iter_rows(values_only=True)):
+                                if i == 0:
+                                    headers = [str(cell) if cell else "" for cell in row]
+                                    break
                             if sht == "问题单":
-                                wb_idx_name = next((h for h in headers if any(kw in str(h) for kw in ["运单", "订单", "单号"])), headers[2] if len(headers) > 2 else None)
-                                type_idx_name = headers[0] if len(headers) > 0 else None
-                                if wb_idx_name and type_idx_name:
-                                    types = df_sht[type_idx_name].fillna("").astype(str).str.strip()
-                                    wbs = df_sht[wb_idx_name].fillna("").astype(str).str.strip().str.replace(r"\.0+$", "", regex=True).str.strip("'")
-                                    for t, w in zip(types, wbs):
-                                        if w and "nan" not in str(w).lower(): existing_waybills[sht][f"{t}_{w}"] = file_basename
+                                wb_idx = next((i for i, h in enumerate(headers) if
+                                               any(kw in str(h) for kw in ["运单", "订单", "单号"])), 2)
+                                type_idx = 0
+                                for i, row in enumerate(ws_temp.iter_rows(values_only=True)):
+                                    if i == 0: continue
+                                    val_type = str(row[type_idx]).strip() if type_idx < len(row) and row[
+                                        type_idx] is not None else ""
+                                    val_wb = clean_wb_str(row[wb_idx]) if wb_idx < len(row) else ""
+                                    if val_wb: existing_waybills[sht][f"{val_type}_{val_wb}"] = file_basename
                             else:
                                 fallback_idx = 10 if sht == "违规索赔" else None
-                                wb_idx_name = next((h for h in headers if any(kw in str(h) for kw in ["运单", "订单", "单号"])), headers[fallback_idx] if fallback_idx is not None and fallback_idx < len(headers) else None)
-                                if wb_idx_name:
-                                    wbs = df_sht[wb_idx_name].fillna("").astype(str).str.strip().str.replace(r"\.0+$", "", regex=True).str.strip("'")
-                                    for w in wbs:
-                                        if w and "nan" not in str(w).lower(): existing_waybills[sht][w] = file_basename
-                    xls.close()
+                                wb_idx = next((i for i, h in enumerate(headers) if
+                                               any(kw in str(h) for kw in ["运单", "订单", "单号"])), fallback_idx)
+                                if wb_idx is not None:
+                                    for i, row in enumerate(ws_temp.iter_rows(values_only=True)):
+                                        if i == 0: continue
+                                        if wb_idx < len(row):
+                                            val_wb = clean_wb_str(row[wb_idx])
+                                            if val_wb: existing_waybills[sht][val_wb] = file_basename
+                    temp_wb.close()
                 except Exception as e:
                     log(f"读取历史记录防重失败: {os.path.basename(file)} - {str(e)}", "WARN")
 
@@ -267,15 +267,12 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                 try:
                     s_replaced = df_source[col].copy()
                     s_replaced.replace("", np.nan, inplace=True)
-                    sample_val = s_replaced.dropna().iloc[0] if not s_replaced.dropna().empty else ""
-                    if len(str(sample_val).replace('.0', '')) < 15:
-                        s_num = pd.to_numeric(s_replaced)
-                        # 如果转换成功，且没有将有效的字符串强制转换为 NaN（除非它们是空的）
-                        if not s_num.isna().any() or s_replaced.isna().equals(s_num.isna()):
-                            df_source[col] = s_num
+                    s_num = pd.to_numeric(s_replaced)
+                    # 如果转换成功，且没有将有效的字符串强制转换为 NaN（除非它们是空的）
+                    if not s_num.isna().any() or s_replaced.isna().equals(s_num.isna()):
+                        df_source[col] = s_num
                 except Exception:
                     pass
-            df_source = df_source.replace({np.nan: None})
 
             if "兼职价格档案" in wb_name:
                 try:
@@ -401,7 +398,6 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                             df_source[col] = pd.to_numeric(df_source[col])
                         except Exception:
                             pass
-                df_source = df_source.replace({np.nan: None})
 
                 headers_sht0 = list(df_source.columns)
                 ws_sht0 = fast_recreate_sheet(wb1, "配送单")
@@ -1195,18 +1191,17 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                     b_status_col = c
 
             bind_map = {}
-            for row in ws_bind.iter_rows(min_row=2, max_col=max(b_team_col, b_id_col, b_name_col, b_status_col), values_only=True):
-                b_id = str(row[b_id_col-1] or "").replace('.0', '').strip()
-                if b_id: 
-                    b_team = str(row[b_team_col-1] or "").strip()
-                    b_name = str(row[b_name_col-1] or "").strip()
-                    b_status = str(row[b_status_col-1] or "").replace(" ", "").strip()
-                    bind_map[b_id] = [b_team, b_id, b_name, b_status]
+            for r in range(2, ws_bind.max_row + 1):
+                b_team = str(ws_bind.cell(row=r, column=b_team_col).value or "").strip()
+                b_id = str(ws_bind.cell(row=r, column=b_id_col).value or "").replace('.0', '').strip()
+                b_name = str(ws_bind.cell(row=r, column=b_name_col).value or "").strip()
+                b_status = str(ws_bind.cell(row=r, column=b_status_col).value or "").replace(" ", "").strip()
+                if b_id: bind_map[b_id] = [b_team, b_id, b_name, b_status]
 
-            for row in ws_fund.iter_rows(min_row=2, max_col=3, values_only=True):
-                f_team = str(row[0] or "").strip()
-                f_id = str(row[1] or "").replace('.0', '').strip()
-                f_name = str(row[2] or "").strip()
+            for r in range(2, ws_fund.max_row + 1):
+                f_team = str(ws_fund.cell(row=r, column=1).value or "").strip()
+                f_id = str(ws_fund.cell(row=r, column=2).value or "").replace('.0', '').strip()
+                f_name = str(ws_fund.cell(row=r, column=3).value or "").strip()
 
                 if f_id:
                     if f_id in bind_map:
