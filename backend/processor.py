@@ -399,13 +399,15 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                         except Exception:
                             pass
 
+                last_col = 17 if selected_option == "全职" else 16
+                df_source = df_source.iloc[:, :last_col + 2]
+                
                 headers_sht0 = list(df_source.columns)
                 ws_sht0 = fast_recreate_sheet(wb1, "配送单")
                 ws_sht0.append(headers_sht0)
                 for row_data in df_source.values.tolist():
                     ws_sht0.append(row_data)
                 
-                last_col = 17 if selected_option == "全职" else 16
                 headers = ["运单状态", "是否周末", "是否欺诈单"]
                 for i, h in enumerate(headers): ws_sht0.cell(row=1, column=last_col + i, value=h)
 
@@ -413,36 +415,6 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                     df_sht2 = df_source.iloc[:, 1:4].copy()
                 else:
                     df_sht2 = pd.DataFrame(columns=["团队名称", "骑手ID", "骑手姓名"])
-
-                # 确保申请名单中的所有骑手都被匹配到工作簿中
-                try:
-                    df_apply_local = df_apply.copy()
-                    if len(df_apply_local.columns) > 0 and city in df_apply_local.iloc[:, 0].astype(str).unique():
-                        df_apply_local = df_apply_local[df_apply_local.iloc[:, 0].astype(str) == city]
-                        
-                    df_apply_riders = pd.DataFrame()
-                    cols = df_apply_local.columns
-                    
-                    team_col = next((c for c in cols if '团队' in str(c) or '站' in str(c) or '网点' in str(c)), None)
-                    id_col = next((c for c in cols if 'id' in str(c).lower() or '编号' in str(c)), cols[1] if len(cols) > 1 else None)
-                    name_col = next((c for c in cols if '名' in str(c)), cols[2] if len(cols) > 2 else None)
-                    
-                    team_ser = df_apply_local[team_col] if team_col else pd.Series([""] * len(df_apply_local))
-                    id_ser = df_apply_local[id_col].astype(str).str.replace('.0', '', regex=False).str.strip() if id_col else pd.Series([""] * len(df_apply_local))
-                    name_ser = df_apply_local[name_col] if name_col else pd.Series([""] * len(df_apply_local))
-                    
-                    df_apply_riders = pd.DataFrame({"团队名称": team_ser.values, "骑手ID": id_ser.values, "骑手姓名": name_ser.values})
-                    df_apply_riders.columns = df_sht2.columns if len(df_sht2.columns) == 3 else ["团队名称", "骑手ID", "骑手姓名"]
-                    
-                    if len(df_sht2.columns) > 1:
-                        # 仅添加 团队+ID 尚未存在于 df_sht2 中的骑手，以避免影响跨站点同 ID 骑手
-                        exist_keys = set(df_sht2.iloc[:, 0].astype(str).str.strip() + "_" + df_sht2.iloc[:, 1].astype(str).str.replace('.0', '', regex=False).str.strip())
-                        apply_keys = df_apply_riders.iloc[:, 0].astype(str).str.strip() + "_" + df_apply_riders.iloc[:, 1].astype(str).str.replace('.0', '', regex=False).str.strip()
-                        df_apply_riders = df_apply_riders[~apply_keys.isin(exist_keys)]
-
-                    df_sht2 = pd.concat([df_sht2, df_apply_riders], ignore_index=True)
-                except Exception as e:
-                    log(f"合并申请名单数据失败: {e}", "WARN")
 
                 df_sht2.replace(r'^\s*$', np.nan, regex=True, inplace=True)
                 if len(df_sht2.columns) > 1:
@@ -666,6 +638,9 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                 
                 df_source.iloc[:, 12] = is_fraud_info
                 df_source.iloc[:, 11] = fast_vals
+                
+                temp_cols_to_drop = [c for c in df_source.columns if "Temp_Col_7" in str(c) or "Temp_Col_8" in str(c)]
+                if temp_cols_to_drop: df_source.drop(columns=temp_cols_to_drop, inplace=True)
 
                 ws_wtd = wb1["问题单"]
                 clean_problem_waybills = df_source.iloc[:, 2].apply(clean_wb_str)
@@ -1051,7 +1026,7 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                 ws.freeze_panes = 'A2'
 
             # 仅设置前 1000 行的高度以节省时间
-            limit_r = min(max_r, 1000) if is_raw_sheet else max_r
+            limit_r = max_r
             if ws.title != "配送所得表":
                 for row_idx in range(1, limit_r + 1): 
                     ws.row_dimensions[row_idx].height = 19.5
