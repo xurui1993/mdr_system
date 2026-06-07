@@ -16,10 +16,9 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
             level, "[INFO]")
         log_callback(f"{prefix} {msg}\n", level)
 
-    # Openpyxl strict illegal character regex
-    ILLEGAL_CHARACTERS_RE = re.compile(r'[\000-\010]|[\013-\014]|[\016-\037]')
-
     def clean_str_for_excel(val):
+        import re
+        ILLEGAL_CHARACTERS_RE = re.compile(r'[\000-\010]|[\013-\014]|[\016-\037]')
         if pd.isna(val) or val is None:
             return ""
         if isinstance(val, str):
