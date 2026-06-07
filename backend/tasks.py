@@ -640,7 +640,7 @@ async def run_main_calculation_gen(city, selected_option, source_folder, base_pa
         except Exception as e:
             finish_cb("error", str(e))
 
-    yield create_log_event(">>> 🚀 引擎连接成功，正在启动业务核算引擎...", "INFO")
+    yield create_log_event(">>> ⚙️ 牛马引擎轰鸣，开始新一轮的搬砖...", "INFO")
     
     thread = threading.Thread(target=worker, daemon=True)
     thread.start()

@@ -390,13 +390,13 @@ export default function App() {
           action: currentConfig.action || action,
           targetPath: targetPath,
           theme: {
-            msg_start: [theme.log_init || "系统启动..."],
-            msg_awake: ["防重溯源引擎转动..."],
-            msg_empty: ["这里空空如也..."],
-            msg_process: ["正在处理: {wb_name}"],
-            msg_success: ["✅ {wb_name} 融合完毕。"],
+            msg_start: ["牛马打点器已就绪。老板请吩咐..."],
+            msg_awake: ["开启照妖镜，防止白嫖怪..."],
+            msg_empty: ["怎么连块砖都没有..."],
+            msg_process: ["抡起铁锤砸向: {wb_name}"],
+            msg_success: ["✅ {wb_name} 搬运完毕，汗流浃背。"],
             msg_final: ["执行完成: {result_msg}"],
-            msg_end: ["全部处理完成！"]
+            msg_end: ["今日份牛马岁月流逝完毕！"]
           }
         })
       });
@@ -494,13 +494,13 @@ export default function App() {
         body: JSON.stringify({
           ...effectiveConfig,
           theme: {
-            msg_start: [theme.log_init || "系统启动..."],
-            msg_awake: ["防重溯源引擎转动..."],
-            msg_empty: ["这里空空如也..."],
-            msg_process: ["正在处理: {wb_name}"],
-            msg_success: ["✅ {wb_name} 融合完毕。"],
+            msg_start: ["牛马打点器已就绪。老板请吩咐..."],
+            msg_awake: ["开启照妖镜，防止白嫖怪..."],
+            msg_empty: ["怎么连块砖都没有..."],
+            msg_process: ["抡起铁锤砸向: {wb_name}"],
+            msg_success: ["✅ {wb_name} 搬运完毕，汗流浃背。"],
             msg_final: ["执行完成: {result_msg}"],
-            msg_end: ["全部处理完成！"]
+            msg_end: ["今日份牛马岁月流逝完毕！"]
           }
         })
       });

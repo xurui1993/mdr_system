@@ -83,7 +83,7 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
 
     try:
         start_time = time.time()
-        progress_callback(0.02, "召唤系统核心中...")
+        progress_callback(0.02, "喝口黑咖啡，唤醒打工魂...")
         log(f">>> {random.choice(theme['msg_start'])}", "SYSTEM")
 
         from openpyxl.styles import Font, Alignment, Border, Side, PatternFill
@@ -91,8 +91,8 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
         from openpyxl.utils import get_column_letter
 
         log(f">>> {random.choice(theme['msg_awake'])}", "SYSTEM")
-        progress_callback(0.05, "偷瞄极品草料名单...")
-        log(f"锁定目标区: [{city}], 任务节奏: [{selected_option}]")
+        progress_callback(0.05, "啃两口干草，审视打卡名单...")
+        log(f"砖厂坐标: [{city}], 搬砖节奏: [{selected_option}]")
 
         keywords = ["欺诈单", "问题单", "违规", "配送费", "骑手支付绑定", "兼职价格档案"]
         ar = ["是否剔除", "剔除原因", "扣款金额"]
@@ -128,7 +128,7 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
             if id_col is not None:
                 team_mapping = dict(zip(df_team[name_col].fillna("").astype(str).str.strip(),
                                         df_team[id_col].fillna("").astype(str).str.strip()))
-            log(f"成功加载【团队名称】映射表，共备好 {len(team_mapping)} 条匹配锦囊~")
+            log(f"领包工头花名册已就位，共认领 {len(team_mapping)} 个施工队！")
         except Exception as e:
             log(f"未找到【团队名称】表或解析失败 (配送所得表A列将留空): {e}", "WARN")
 
@@ -146,15 +146,15 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                 continue
 
         apply_riders_count = len(df_apply.iloc[:, 1].dropna().unique())
-        log(f"名单解读成功，发现排班表中登记了 {apply_riders_count} 个打工人（共对应 {len(valid_riders_dates)} 个出勤日次）~")
-        progress_callback(0.15, "名单确认完毕")
+        log(f"考勤本翻到底，共发现 {apply_riders_count} 头牛马（合计拉磨 {len(valid_riders_dates)} 天次）！")
+        progress_callback(0.15, "点卯完毕，无人缺勤")
 
         output_base = workspace_path if workspace_path else base_dir
         out_folder = os.path.join(output_base, f"{last_date.month}月{city}兼职核算")
         stats_info["out_folder"] = out_folder
         os.makedirs(out_folder, exist_ok=True)
 
-        log(">>> 正在扫描历史文件库，启动防重溯源雷达...", "SYSTEM")
+        log(">>> 翻阅旧账本，防范重复发草料...", "SYSTEM")
         existing_waybills = {"配送单": {}, "违规索赔": {}, "问题单": {}}
         if os.path.exists(out_folder):
             for file in glob.glob(os.path.join(out_folder, "*.xlsx")):
@@ -212,7 +212,7 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
         if not template_path:
             raise FileNotFoundError(f"哎呀！运行过程中出了个小意外：模板文件找不到了 (需包含 {city}-template.xlsx)。请确保 template 目录存放在工程同级目录下。")
 
-        log(f"开始疯狂填表: {os.path.basename(template_path)}", "SYSTEM")
+        log(f"开始疯狂给资本家拉磨: {os.path.basename(template_path)}", "SYSTEM")
         wb1 = openpyxl.load_workbook(template_path)
         
         def fast_recreate_sheet(wb, sheet_name):
@@ -240,9 +240,9 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
             for c_idx in [4, 5]:
                 if c_idx <= len(row): ws_apply.cell(row=r_idx, column=c_idx).number_format = 'yyyy/mm/dd'
 
-        progress_callback(0.25, "基础模板就绪")
+        progress_callback(0.25, "工位已打扫，准备开卷")
 
-        log(">>> 正在库里寻觅待处理源文件...", "SYSTEM")
+        log(">>> 努力在成山的文件夹里刨食...", "SYSTEM")
         files_to_process = []
         for kw in keywords:
             search_pattern = os.path.join(source_folder, f"*{kw}*.*")
@@ -250,7 +250,7 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                 if f.lower().endswith(('.xls', '.xlsx', '.csv')): files_to_process.append((f, kw))
 
         total_files = len(files_to_process)
-        log(f"寻觅结束，抱回了 {total_files} 个文件袋")
+        log(f"刨食结束，薅出来 {total_files} 块砖头")
         has_delivery_fee = any('配送费' in kw_tuple[1] for kw_tuple in files_to_process)
         if not has_delivery_fee:
             raise FileNotFoundError("当前数据目录下未检测到包含【配送费】的数据表！请确保目录中含有配送单表后再执行核算。")
@@ -323,10 +323,10 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                     except Exception:
                         pass
 
-                log(f"-> 🎯 蓝橙单价档案装载成功！(ID规则数: {len(price_mapping_id)} |姓名规则数: {len(price_mapping_name)})", "INFO")
+                log(f"-> 🎯 黑市单价表已背熟！(认ID计 {len(price_mapping_id)} 个 | 认人脸计 {len(price_mapping_name)} 个)", "INFO")
                 processed_count += 1
                 current_progress += progress_step
-                progress_callback(current_progress, f"狂奔中 {processed_count}/{total_files}: {wb_name[:12]}...")
+                progress_callback(current_progress, f"搬砖中 {processed_count}/{total_files}: {wb_name[:12]}...")
                 continue
 
             match_key = next((k for k in dict1.keys() if k in wb_name), None)
@@ -479,7 +479,7 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                 last_row_sht2 = len(data_list) + 1
                 num_riders = last_row_sht2 - 1
                 stats_info["riders"] = max(stats_info.get("riders", 0), num_riders)
-                log(f"-> 🎯 统计完毕：【安全基金】结算骑手共计 {num_riders} 人，总计 {stats_info['orders']} 单！", "INFO")
+                log(f"-> 🎯 盘点结束：【安全基金】共护体 {num_riders} 名兄弟，抵御 {stats_info['orders']} 次单量暴击！", "INFO")
 
                 if last_row_sht2 > 2:
                     import re
@@ -742,7 +742,7 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
 
                     df_bind_status = pd.read_excel(file_path, sheet_name=target_sheet, dtype=str)
                     df_bind_status.fillna("", inplace=True)
-                    log(f"-> 🎯 成功读取带有绑定情况内容的子表：【{target_sheet}】！", "INFO")
+                    log(f"-> 🎯 终于刨出带底细的表格：【{target_sheet}】！", "INFO")
                 except Exception as e:
                     log(f"尝试读取【绑定情况】表失败，回退使用默认表: {e}", "WARN")
                     df_bind_status = df_source.copy()
@@ -764,8 +764,8 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
             current_progress += progress_step
             progress_callback(current_progress, f"狂奔中 {processed_count}/{total_files}: {wb_name[:12]}...")
 
-        log(">>> 正在提提炼专属【日单量】汇总表，并匹配蓝橙单价...", "SYSTEM")
-        progress_callback(0.85, "多维统计单价中...")
+        log(">>> 正在熬夜核算【日单量】，祈祷老板加鸡腿...", "SYSTEM")
+        progress_callback(0.85, "疯狂按计算器中...")
         ws_sht0 = wb1["配送单"]
         headers = []
         status_idx = -1
@@ -896,7 +896,7 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
 
         grouped = defaultdict(list)
         if no_price_records:
-            log(f">>> 🚨 发现无单价数据，正在汇总并装进【蓝橙无单价明细】子表！", "WARN")
+            log(f">>> 🚨 发现白打工记录！正在整理成【蓝橙无单价明细】上报工头！", "WARN")
             if "蓝橙无单价明细" in wb1.sheetnames:
                 ws_noprice = fast_recreate_sheet(wb1, "蓝橙无单价明细")
                 current_idx = wb1.index(ws_noprice)
@@ -1050,8 +1050,8 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                 else:
                     ws_intercept.append([rec[0], rec[1], rec[2], "", ""])
 
-        log(">>> 正在为结果表钉上金装...", "SYSTEM")
-        progress_callback(0.90, "精美装扮中...")
+        log(">>> 正在为报表做最后的PPT级美化...", "SYSTEM")
+        progress_callback(0.90, "疯狂洗稿排版中...")
         border_style = Side(border_style="thin", color="000000")
         border = Border(left=border_style, right=border_style, top=border_style, bottom=border_style)
         font_style = Font(name="微软雅黑", size=10)
@@ -1107,19 +1107,18 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                 for row_idx in range(1, max_r + 1):
                     ws.row_dimensions[row_idx].height = 19.5
 
-            iter_max_r = max_r
+            iter_max_r = 0 if ws.title == "配送所得表" else max_r
                 
             if iter_max_r > 0:
                 for row_idx, row in enumerate(ws.iter_rows(min_row=1, max_row=iter_max_r, min_col=1, max_col=max_c), 1):
                     is_header = (row_idx == 1)
                     target_style = "ns_strike" if is_intercept_sheet and not is_header else "ns_normal"
                     for col_idx, cell in enumerate(row, 1):
-                        if ws.title != "配送所得表":
-                            current_style = target_style
-                            if not is_header and is_apply_sheet and col_idx in [4, 5]:
-                                current_style = "ns_date"
-                                
-                            cell.style = current_style
+                        current_style = target_style
+                        if not is_header and is_apply_sheet and col_idx in [4, 5]:
+                            current_style = "ns_date"
+                            
+                        cell.style = current_style
 
                         if is_intercept_sheet and is_header:
                             cell.font = red_font_header
@@ -1128,9 +1127,6 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                         if val is None: continue
 
                         if not is_header and not (is_apply_sheet and col_idx in [4, 5]):
-                            if ws.title == "配送所得表" and row_idx < 4:
-                                continue
-                            
                             val_type = type(val)
                             if val_type is str:
                                 val_str = val.strip()
@@ -1149,6 +1145,17 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                             elif val_type is int:
                                 cell.number_format = '0'
 
+            wrapped_columns = set()
+            if ws.title == "配送所得表":
+                for col_idx in range(1, max_c + 1):
+                    c3 = ws.cell(row=3, column=col_idx)
+                    c4 = ws.cell(row=4, column=col_idx)
+                    c5 = ws.cell(row=5, column=col_idx)
+                    if (c3.alignment and getattr(c3.alignment, 'wrap_text', False)) or \
+                       (c4.alignment and getattr(c4.alignment, 'wrap_text', False)) or \
+                       (c5.alignment and getattr(c5.alignment, 'wrap_text', False)):
+                        wrapped_columns.add(col_idx)
+
             min_row_for_width = 4 if ws.title == "配送所得表" else 1
             max_lengths = [0] * max_c
             for row_val in ws.iter_rows(min_row=min_row_for_width, max_row=min(2000, max_r), min_col=1, max_col=max_c, values_only=True):
@@ -1162,6 +1169,9 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
             
             for col_idx, max_length in enumerate(max_lengths, 1):
                 col_letter = get_column_letter(col_idx)
+                if ws.title == "配送所得表" and col_idx in wrapped_columns:
+                    continue
+                
                 if max_length > 0:
                     ws.column_dimensions[col_letter].width = max(11, min(max_length * 1.2 + 3.0, 65))
                 elif ws.title != "配送所得表":
@@ -1198,7 +1208,7 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
         has_special_data = False
 
         if "蓝橙无单价明细" in wb1.sheetnames:
-            log(">>> 正在将【蓝橙无单价明细】打包剥离...", "SYSTEM")
+            log(">>> 正在剥离【蓝橙无单价明细】，这锅我不背...", "SYSTEM")
             ws_noprice_old = wb1["蓝橙无单价明细"]
             ws_special_1 = ws_default
             ws_special_1.title = "蓝橙无单价明细"
@@ -1261,7 +1271,7 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                     else:
                         unbound_records.append([f_team, f_id, f_name, "不在支付绑定名单中"])
 
-        log(f">>> 雷达探测结束，底层直接碰撞出 {len(unbound_records)} 条未绑记录！", "SYSTEM")
+        log(f">>> 秋后算账，挖出 {len(unbound_records)} 个未绑卡的黑户！", "SYSTEM")
 
         if has_special_data:
             ws_special_2 = wb_special.create_sheet("发薪工具未绑名单")
@@ -1312,19 +1322,19 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
         save_name = f"{file_prefix}{datetime.now().strftime('%m%d')}.xlsx"
         final_save_path = os.path.join(out_folder, save_name)
 
-        progress_callback(0.98, "生成最终报表中...")
+        progress_callback(0.98, "准备按下向老板提交的发送键...")
         wb1.save(final_save_path)
 
-        log(">>> 🎯 公式质检防漏完毕！", "SUCCESS")
+        log(">>> 🎯 账目糊弄...啊不，核对无误！", "SUCCESS")
 
         if intercept_records: log(f">>> 🚨 红色警报：本次共拦截 {len(intercept_records)} 条重复数据！已悉数戴上红牌关押至【拦截溯源】子表！", "ERROR")
 
         elapsed_time = time.time() - start_time
         stats_info["elapsed_time"] = round(elapsed_time, 2)
         log(f">>> {random.choice(theme['msg_end'])}", "SYSTEM")
-        log(f"本次运行消耗了: {elapsed_time:.2f} 秒")
-        log(f"大功告成，产出文件: {final_save_path}", "INFO")
-        progress_callback(1.00, "收工，准备下班~")
+        log(f"本次摸鱼偷走了老板: {elapsed_time:.2f} 秒")
+        log(f"万幸没出锅，产物已甩到: {final_save_path}", "INFO")
+        progress_callback(1.00, "脱下牛马服，拥抱自由~")
         finish_callback("success", final_save_path, stats_info)
     except Exception as e:
         import traceback
