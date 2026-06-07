@@ -370,8 +370,23 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                     cols_to_drop.extend(list(range(23, 38)))
                 else:
                     cols_to_drop.extend(list(range(22, 38)))
+                
+                # Make column names unique to prevent pd.Series/DataFrame nested issues
+                new_cols = []
+                seen = {}
+                for c in df_source.columns:
+                    c_str = str(c)
+                    if c_str in seen:
+                        seen[c_str] += 1
+                        new_cols.append(f"{c_str}_{seen[c_str]}")
+                    else:
+                        seen[c_str] = 0
+                        new_cols.append(c_str)
+                df_source.columns = new_cols
+                
                 cols_to_drop = [c for c in cols_to_drop if c < len(df_source.columns)]
-                df_source.drop(df_source.columns[cols_to_drop], axis=1, inplace=True)
+                keep_cols = [c for c in range(len(df_source.columns)) if c not in cols_to_drop]
+                df_source = df_source.iloc[:, keep_cols].copy()
                 df_source = df_source[~df_source.iloc[:, 6].astype(str).str.contains("异常", na=False)]
 
                 wb_col_name = next((c for c in df_source.columns if any(kw in str(c) for kw in ["运单", "订单", "单号"])),
@@ -413,8 +428,9 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                 headers = ["运单状态", "是否周末", "是否欺诈单"]
                 for i, h in enumerate(headers): ws_sht0.cell(row=1, column=last_col + i, value=h)
 
-                if len(df_source) > 0:
+                if len(df_source) > 0 and len(df_source.columns) >= 4:
                     df_sht2 = df_source.iloc[:, 1:4].copy()
+                    df_sht2.columns = ["团队名称", "骑手ID", "骑手姓名"]
                 else:
                     df_sht2 = pd.DataFrame(columns=["团队名称", "骑手ID", "骑手姓名"])
 
@@ -548,7 +564,8 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
             elif "违规" in wb_name:
                 cols_to_drop = [1, 2, 3, 15, 16]
                 cols_to_drop = [c for c in cols_to_drop if c < len(df_source.columns)]
-                df_source.drop(df_source.columns[cols_to_drop], axis=1, inplace=True)
+                keep_cols = [c for c in range(len(df_source.columns)) if c not in cols_to_drop]
+                df_source = df_source.iloc[:, keep_cols].copy()
 
                 data_arr = df_source.values.tolist()
                 headers = df_source.columns.tolist()
