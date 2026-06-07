@@ -418,35 +418,6 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                 else:
                     df_sht2 = pd.DataFrame(columns=["团队名称", "骑手ID", "骑手姓名"])
 
-                # 确保申请名单中的所有骑手都被匹配到工作簿中
-                try:
-                    df_apply_local = df_apply.copy()
-                    if len(df_apply_local.columns) > 0 and city in df_apply_local.iloc[:, 0].astype(str).unique():
-                        df_apply_local = df_apply_local[df_apply_local.iloc[:, 0].astype(str) == city]
-                        
-                    df_apply_riders = pd.DataFrame()
-                    cols = df_apply_local.columns
-                    
-                    team_col = next((c for c in cols if '团队' in str(c) or '站' in str(c) or '网点' in str(c)), None)
-                    id_col = next((c for c in cols if 'id' in str(c).lower() or '编号' in str(c)), cols[1] if len(cols) > 1 else None)
-                    name_col = next((c for c in cols if '名' in str(c)), cols[2] if len(cols) > 2 else None)
-                    
-                    team_ser = df_apply_local[team_col] if team_col else pd.Series([""] * len(df_apply_local))
-                    id_ser = df_apply_local[id_col].astype(str).str.replace('.0', '', regex=False).str.strip() if id_col else pd.Series([""] * len(df_apply_local))
-                    name_ser = df_apply_local[name_col] if name_col else pd.Series([""] * len(df_apply_local))
-                    
-                    df_apply_riders = pd.DataFrame({"团队名称": team_ser.values, "骑手ID": id_ser.values, "骑手姓名": name_ser.values})
-                    df_apply_riders.columns = df_sht2.columns if len(df_sht2.columns) == 3 else ["团队名称", "骑手ID", "骑手姓名"]
-                    
-                    if len(df_sht2.columns) > 0:
-                        # 仅保留配送单表团队下的记录
-                        existing_teams = set(df_sht2.iloc[:, 0].astype(str).str.strip())
-                        df_apply_riders = df_apply_riders[df_apply_riders.iloc[:, 0].astype(str).str.strip().isin(existing_teams)]
-
-                    df_sht2 = pd.concat([df_sht2, df_apply_riders], ignore_index=True)
-                except Exception as e:
-                    log(f"合并申请名单数据失败: {e}", "WARN")
-
                 df_sht2.replace(r'^\s*$', np.nan, regex=True, inplace=True)
                 if len(df_sht2.columns) > 1:
                     df_sht2.iloc[:, 1] = df_sht2.iloc[:, 1].astype(str).str.replace('.0', '', regex=False).str.strip()
