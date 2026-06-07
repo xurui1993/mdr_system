@@ -118,10 +118,10 @@ export default function App() {
               setAppConfig(prev => {
                 let newConfig = { ...prev, ...data };
                 // 强制将带有 dist 的路径或者旧的默认路径重置为正确的工程同级目录
-                if (!newConfig.basePath || newConfig.basePath === '../config.xlsx' || newConfig.basePath === '..' || /dist[\\/]config\.xlsx$/i.test(newConfig.basePath)) {
+                if (newConfig.basePath === '../config.xlsx' || newConfig.basePath === '..' || newConfig.basePath.match(/[\\/]dist[\\/]config\.xlsx$/i)) {
                   newConfig.basePath = defaultData.configPath;
                 }
-                if (!newConfig.sourcePath || newConfig.sourcePath === './data' || /dist[\\/]data$/i.test(newConfig.sourcePath) || /[\\/]三亚$/i.test(newConfig.sourcePath)) {
+                if (newConfig.sourcePath === './data' || newConfig.sourcePath.match(/[\\/]dist[\\/]data$/i) || newConfig.sourcePath.match(/[\\/]三亚$/i)) {
                   newConfig.sourcePath = defaultData.dataPath;
                 }
                 return newConfig;
@@ -129,10 +129,10 @@ export default function App() {
             } else {
               setAppConfig(prev => {
                 let newConfig = { ...prev };
-                if (!newConfig.basePath || newConfig.basePath === '../config.xlsx' || newConfig.basePath === '..' || /dist[\\/]config\.xlsx$/i.test(newConfig.basePath)) {
+                if (newConfig.basePath === '../config.xlsx' || newConfig.basePath === '..') {
                   newConfig.basePath = defaultData.configPath;
                 }
-                if (!newConfig.sourcePath || newConfig.sourcePath === './data' || /dist[\\/]data$/i.test(newConfig.sourcePath) || /[\\/]三亚$/i.test(newConfig.sourcePath)) {
+                if (newConfig.sourcePath === './data') {
                   newConfig.sourcePath = defaultData.dataPath;
                 }
                 return newConfig;

@@ -592,15 +592,12 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                     if "欺诈单" in str(row[6]): row[12], row[13], row[14] = "是", "欺诈单不考核", 0
 
                 ws_wg = wb1["违规索赔"]
-                try:
-                    start_row = ws_wg.max_row + 1
-                    if start_row == 2 and ws_wg.cell(row=1, column=1).value is None:
-                        start_row = 1
-                except:
-                    start_row = 1
+                start_row = 1
+                while ws_wg.cell(row=start_row, column=1).value is not None: start_row += 1
 
                 if start_row == 1:
-                    ws_wg.append(headers)
+                    for c_idx, h_val in enumerate(headers, 1): ws_wg.cell(row=start_row, column=c_idx, value=h_val)
+                    start_row += 1
 
                 added_penalty_count = 0
                 wb_idx = next((i for i, c in enumerate(headers) if any(kw in str(c) for kw in ["运单", "订单", "单号"])), 10)
@@ -625,13 +622,15 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                             intercept_records.append((src_file, "索赔扣款", wb_val, r_id, r_name))
                             dup_sources[src_file] = dup_sources.get(src_file, 0) + 1
                         else:
-                            ws_wg.append(list(row))
+                            for c_idx, val in enumerate(row, 1): ws_wg.cell(row=start_row, column=c_idx, value=val)
+                            start_row += 1
                             added_penalty_count += 1
                     for src_file, count in dup_sources.items(): log(
                         f"💥 [红牌拦截] 发现 {count} 条【违规索赔】重复记录！(源自历史文件: {src_file})", "ERROR")
                 else:
                     for row in data_arr:
-                        ws_wg.append(list(row))
+                        for c_idx, val in enumerate(row, 1): ws_wg.cell(row=start_row, column=c_idx, value=val)
+                        start_row += 1
                         added_penalty_count += 1
 
                 stats_info["penalty_orders"] += added_penalty_count
@@ -1266,7 +1265,52 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
         progress_callback(0.98, "生成最终报表中...")
         wb1.save(final_save_path)
 
-        log(">>> 🎯 公式质检防漏完毕！", "SUCCESS")
+        log(">>> 正在执行薪资方案公式比对与精准质检...", "SYSTEM")
+        try:
+            from openpyxl.styles import PatternFill
+            red_fill = PatternFill(start_color="FFFF0000", end_color="FFFF0000", fill_type="solid")
+            
+            wb_com = openpyxl.load_workbook(final_save_path, data_only=True)
+            if "配送所得表" in wb_com.sheetnames:
+                ws_com = wb_com["配送所得表"]
+                
+                lei_col = -1
+                plan_col = -1
+                for r in range(1, min(6, ws_com.max_row + 1)):
+                    for c in range(1, ws_com.max_column + 1):
+                        val = str(ws_com.cell(row=r, column=c).value or "").strip()
+                        if "蓝橙单价" in val: lei_col = c
+                        if "薪资方案" in val: plan_col = c
+                    if lei_col != -1 and plan_col != -1: break
+
+                if lei_col != -1 and plan_col != -1:
+                    def is_equal(v1, v2):
+                        s1 = str(v1).strip() if v1 is not None else ""
+                        s2 = str(v2).strip() if v2 is not None else ""
+                        if s1 == s2: return True
+                        try: return float(s1) == float(s2)
+                        except: return False
+
+                    wb_rw = openpyxl.load_workbook(final_save_path)
+                    ws_rw = wb_rw["配送所得表"]
+                    updated = False
+                    
+                    for r_idx in range(4, ws_com.max_row + 1):
+                        val_lei = ws_com.cell(row=r_idx, column=lei_col).value
+                        val_plan = ws_com.cell(row=r_idx, column=plan_col).value
+
+                        s_lei = str(val_lei).strip() if val_lei is not None else ""
+                        s_plan = str(val_plan).strip() if val_plan is not None else ""
+                        if s_lei and s_plan and s_lei != "无单价" and not is_equal(val_lei, val_plan):
+                            ws_rw.cell(row=r_idx, column=plan_col).fill = red_fill
+                            updated = True
+                            
+                    if updated:
+                        wb_rw.save(final_save_path)
+
+                log(">>> 🎯 公式质检防漏标红全部完成！", "SUCCESS")
+        except Exception as e:
+            log(f"引擎处理时发生异常: {e}", "WARN")
 
         if intercept_records: log(f">>> 🚨 红色警报：本次共拦截 {len(intercept_records)} 条重复数据！已悉数戴上红牌关押至【拦截溯源】子表！", "ERROR")
 
