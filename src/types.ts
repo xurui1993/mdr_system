@@ -43,8 +43,6 @@ export interface AppConfig {
   issueCycles?: string[];
   issueSelectedCities?: string[];
   enableInterceptor?: boolean;
-  enableProblemRemoval?: boolean;
-  problemRemovalPath?: string;
 }
 
 export interface LogEntry {

@@ -8,10 +8,9 @@ interface ActionPanelProps {
   isRunning: boolean;
   onRun: () => void;
   progress: number;
-  onAction?: (action: string) => void;
 }
 
-export function ActionPanel({ theme, isRunning, onRun, progress, onAction }: ActionPanelProps) {
+export function ActionPanel({ theme, isRunning, onRun, progress }: ActionPanelProps) {
   const [mutter, setMutter] = useState(MUTTERINGS[0]);
   const [timerText, setTimerText] = useState('00:00.0');
 
@@ -91,24 +90,7 @@ export function ActionPanel({ theme, isRunning, onRun, progress, onAction }: Act
           />
         </div>
 
-        <div className="flex items-center gap-4 mt-6">
-          <button 
-            onClick={() => onAction && onAction('remove_problem_orders')}
-            disabled={isRunning}
-            className="flex-1 border border-sky-500/30 bg-sky-500/5 py-2.5 rounded-xl text-slate-300 hover:text-sky-200 hover:bg-sky-500/20 hover:border-sky-400 transition-all font-medium text-[13px] tracking-widest disabled:opacity-50"
-          >
-            问题单剔除
-          </button>
-          <button 
-            onClick={() => onAction && onAction('raise_price')}
-            disabled={isRunning}
-            className="flex-1 border border-sky-500/30 bg-sky-500/5 py-2.5 rounded-xl text-slate-300 hover:text-sky-200 hover:bg-sky-500/20 hover:border-sky-400 transition-all font-medium text-[13px] tracking-widest disabled:opacity-50"
-          >
-            提价数据流转
-          </button>
-        </div>
-
-        <span className="text-sky-500/60 text-[13px] font-mono text-center mt-6 tracking-[0.2em] pt-1">
+        <span className="text-sky-500/60 text-[13px] font-mono text-right mt-6 tracking-[0.2em] pt-1">
           {mutter}
         </span>
       </div>

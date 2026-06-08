@@ -185,43 +185,6 @@ export function ControlPanel({ theme, config, onChangeConfig, onAction }: Contro
         </button>
       </div>
 
-      {/* Row 4: Toggles */}
-      <div className="flex items-center gap-6 relative z-10 pt-2 border-t border-sky-500/10">
-        <label className="flex items-center gap-2 cursor-pointer group">
-          <div className="relative">
-            <input 
-              type="checkbox" 
-              checked={config.enableInterceptor ?? false} 
-              onChange={e => updateConfig('enableInterceptor', e.target.checked)}
-              className="sr-only" 
-            />
-            <div className={`w-10 h-5 rounded-full transition-colors ${config.enableInterceptor ? 'bg-sky-500' : 'bg-slate-700'}`} />
-            <div className={`absolute left-1 top-1 w-3 h-3 bg-white rounded-full transition-transform ${config.enableInterceptor ? 'translate-x-5' : 'translate-x-0'}`} />
-          </div>
-          <span className="text-[14px] text-slate-300 font-medium tracking-wide group-hover:text-sky-300 transition-colors">防重打款拦截（自动剔除已核算运单）</span>
-        </label>
-        
-        <label className="flex items-center gap-2 cursor-pointer group">
-          <div className="relative">
-            <input 
-              type="checkbox" 
-              checked={config.enableProblemRemoval ?? false} 
-              onChange={e => {
-                const checked = e.target.checked;
-                updateConfig('enableProblemRemoval', checked);
-                if (checked) {
-                  onAction('setup_problem_removal');
-                }
-              }}
-              className="sr-only" 
-            />
-            <div className={`w-10 h-5 rounded-full transition-colors ${config.enableProblemRemoval ? 'bg-sky-500' : 'bg-slate-700'}`} />
-            <div className={`absolute left-1 top-1 w-3 h-3 bg-white rounded-full transition-transform ${config.enableProblemRemoval ? 'translate-x-5' : 'translate-x-0'}`} />
-          </div>
-          <span className="text-[14px] text-slate-300 font-medium tracking-wide group-hover:text-sky-300 transition-colors">开启问题单自动剔除</span>
-        </label>
-      </div>
-
     </div>
   );
 }
