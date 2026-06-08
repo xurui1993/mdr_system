@@ -198,42 +198,46 @@ async def run_calculation(config: ConfigRequest):
     接收来自前端的运算指令，支持本地绝对路径或相对路径
     """
     async def event_generator():
-        import tasks
+        try:
+            import tasks
 
-        if config.action == 'remove_problem_orders':
-            async for event in tasks.run_remove_problem_orders_gen(config.sourcePath, config.targetPath):
-                yield event
-            return
-            
-        elif config.action == 'raise_price':
-            async for event in tasks.run_raise_price_gen(config.sourcePath, config.targetPath):
-                yield event
-            return
+            if config.action == 'remove_problem_orders':
+                async for event in tasks.run_remove_problem_orders_gen(config.sourcePath, config.targetPath):
+                    yield event
+                return
+                
+            elif config.action == 'raise_price':
+                async for event in tasks.run_raise_price_gen(config.sourcePath, config.targetPath):
+                    yield event
+                return
 
-        elif config.action == 'summary_parttime':
-            async for event in tasks.run_summary_parttime_gen(config.sourcePath, config.city):
-                yield event
-            return
+            elif config.action == 'summary_parttime':
+                async for event in tasks.run_summary_parttime_gen(config.sourcePath, config.city):
+                    yield event
+                return
 
-        elif config.action == 'salary_bind':
-            import salary_bind_processor
-            async for event in salary_bind_processor.run_salary_bind_gen(config.sourcePath):
-                yield event
-            return
+            elif config.action == 'salary_bind':
+                import salary_bind_processor
+                async for event in salary_bind_processor.run_salary_bind_gen(config.sourcePath):
+                    yield event
+                return
 
-        else:
-            
-            # 默认的主计算流程
-            async for event in tasks.run_main_calculation_gen(
-                config.city, 
-                config.cycle, 
-                config.sourcePath, 
-                config.basePath, 
-                config.theme,
-                config.workspacePath,
-                config.enableInterceptor
-            ):
-                yield event
-            return
+            else:
+                
+                # 默认的主计算流程
+                async for event in tasks.run_main_calculation_gen(
+                    config.city, 
+                    config.cycle, 
+                    config.sourcePath, 
+                    config.basePath, 
+                    config.theme,
+                    config.workspacePath,
+                    config.enableInterceptor
+                ):
+                    yield event
+                return
+        except Exception as e:
+            yield f"data: {json.dumps({'type': 'log', 'msg': f'致命内部错误: {str(e)}', 'level': 'ERROR'})}\n\n"
+            yield f"data: {json.dumps({'type': 'finish', 'status': 'error', 'result_msg': str(e)})}\n\n"
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")
