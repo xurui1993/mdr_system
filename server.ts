@@ -13,10 +13,9 @@ async function startServer() {
   console.log("Starting Python backend...");
   
   const isWin = process.platform === "win32";
-  const pipCmd = isWin ? "pip" : "pip3";
   const pythonCmd = isWin ? "python" : "python3";
   
-  const pipProcess = spawn(pipCmd, ["install", "-r", "requirements.txt", "--break-system-packages"], {
+  const pipProcess = spawn(pythonCmd, ["-m", "pip", "install", "-r", "requirements.txt", "--break-system-packages"], {
     cwd: path.join(process.cwd(), "backend"),
     stdio: "inherit",
     shell: isWin
@@ -27,7 +26,7 @@ async function startServer() {
   });
 
   pipProcess.on("close", (code) => {
-    console.log(`${pipCmd} install exited with code ${code}`);
+    console.log(`pip install exited with code ${code}`);
     const pythonProcess = spawn(pythonCmd, ["-m", "uvicorn", "main:app", "--port", "8000"], {
       cwd: path.join(process.cwd(), "backend"),
       stdio: "inherit",
