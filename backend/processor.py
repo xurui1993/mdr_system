@@ -159,35 +159,35 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
             log(">>> 翻阅旧账本，防范重复发草料 (防重机制已开启)...", "SYSTEM")
             if os.path.exists(out_folder):
                 for file in glob.glob(os.path.join(out_folder, "*.xlsx")):
-                if "(重复)" in os.path.basename(file) or "~$" in os.path.basename(file): continue
-                try:
+                    if "(重复)" in os.path.basename(file) or "~$" in os.path.basename(file): continue
                     try:
-                        xls = pd.ExcelFile(file, engine="calamine")
-                    except:
-                        xls = pd.ExcelFile(file, engine="openpyxl")
-                    file_basename = os.path.basename(file)
-                    for sht in ["配送单", "违规索赔", "问题单"]:
-                        if sht in xls.sheet_names:
-                            df_sht = xls.parse(sht, dtype=str)
-                            headers = list(df_sht.columns)
-                            if sht == "问题单":
-                                wb_idx_name = find_wb_col(headers, 2)
-                                type_idx_name = headers[0] if len(headers) > 0 else None
-                                if wb_idx_name and type_idx_name:
-                                    types = df_sht[type_idx_name].fillna("").astype(str).str.strip()
-                                    wbs = df_sht[wb_idx_name].fillna("").astype(str).str.strip().str.replace(r"\\.?0+$", "", regex=True).str.strip("'")
-                                    for t, w in zip(types, wbs):
-                                        if w and "nan" not in str(w).lower(): existing_waybills[sht][f"{t}_{w}"] = file_basename
-                            else:
-                                fallback_idx = 10 if sht == "违规索赔" else None
-                                wb_idx_name = find_wb_col(headers, fallback_idx)
-                                if wb_idx_name:
-                                    wbs = df_sht[wb_idx_name].fillna("").astype(str).str.strip().str.replace(r"\\.?0+$", "", regex=True).str.strip("'")
-                                    for w in wbs:
-                                        if w and "nan" not in str(w).lower(): existing_waybills[sht][w] = file_basename
-                    xls.close()
-                except Exception as e:
-                    log(f"读取历史记录防重失败: {os.path.basename(file)} - {str(e)}", "WARN")
+                        try:
+                            xls = pd.ExcelFile(file, engine="calamine")
+                        except:
+                            xls = pd.ExcelFile(file, engine="openpyxl")
+                        file_basename = os.path.basename(file)
+                        for sht in ["配送单", "违规索赔", "问题单"]:
+                            if sht in xls.sheet_names:
+                                df_sht = xls.parse(sht, dtype=str)
+                                headers = list(df_sht.columns)
+                                if sht == "问题单":
+                                    wb_idx_name = find_wb_col(headers, 2)
+                                    type_idx_name = headers[0] if len(headers) > 0 else None
+                                    if wb_idx_name and type_idx_name:
+                                        types = df_sht[type_idx_name].fillna("").astype(str).str.strip()
+                                        wbs = df_sht[wb_idx_name].fillna("").astype(str).str.strip().str.replace(r"\\.?0+$", "", regex=True).str.strip("'")
+                                        for t, w in zip(types, wbs):
+                                            if w and "nan" not in str(w).lower(): existing_waybills[sht][f"{t}_{w}"] = file_basename
+                                else:
+                                    fallback_idx = 10 if sht == "违规索赔" else None
+                                    wb_idx_name = find_wb_col(headers, fallback_idx)
+                                    if wb_idx_name:
+                                        wbs = df_sht[wb_idx_name].fillna("").astype(str).str.strip().str.replace(r"\\.?0+$", "", regex=True).str.strip("'")
+                                        for w in wbs:
+                                            if w and "nan" not in str(w).lower(): existing_waybills[sht][w] = file_basename
+                        xls.close()
+                    except Exception as e:
+                        log(f"读取历史记录防重失败: {os.path.basename(file)} - {str(e)}", "WARN")
 
         intercept_records = []
 
