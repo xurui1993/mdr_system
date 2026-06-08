@@ -1157,7 +1157,7 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                        (c5.alignment and getattr(c5.alignment, 'wrap_text', False)):
                         wrapped_columns.add(col_idx)
 
-            min_row_for_width = 4 if ws.title == "配送所得表" else 1
+            min_row_for_width = 3 if ws.title == "配送所得表" else 1
             max_lengths = [0] * max_c
             for row_val in ws.iter_rows(min_row=min_row_for_width, max_row=min(2000, max_r), min_col=1, max_col=max_c, values_only=True):
                 for idx, val in enumerate(row_val):
@@ -1189,6 +1189,9 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
 
         ws_income.row_dimensions[1].height = 33
         ws_income.row_dimensions[3].height = 31
+
+        for row_idx in range(4, ws_income.max_row + 1):
+            ws_income.row_dimensions[row_idx].height = None
 
         for i, ws in enumerate(wb1.worksheets):
             try:

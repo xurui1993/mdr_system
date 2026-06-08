@@ -9,7 +9,7 @@ import { IssueOrderControlPanel } from './components/IssueOrderControlPanel';
 import { IssueOrderActionPanel } from './components/IssueOrderActionPanel';
 import { TerminalPanel } from './components/TerminalPanel';
 import { RightPanel } from './components/RightPanel';
-import { FolderOpen } from 'lucide-react';
+import { FolderOpen, Filter } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 
 function GenericToolPanel({ theme, actionId, isRunning, onRun, title, description, icon }: any) {
@@ -186,7 +186,7 @@ export default function App() {
 
     let currentConfig = { ...appConfig };
 
-    if (['dev_placeholder', 'remove_problem_orders', 'raise_price', 'overdue_review'].includes(action)) {
+    if (['dev_placeholder', 'raise_price', 'overdue_review'].includes(action)) {
       setLogs([{ text: `>>> 🚧 该功能模块前端界面已就绪，正在等待 Python 后端引擎联调中...`, level: 'INFO' }]);
       setTimeout(() => setIsRunning(false), 1500);
       return;
@@ -413,6 +413,35 @@ export default function App() {
     }
 
     let targetPath = '';
+    
+    if (action === 'remove_problem_orders_flow') {
+      try {
+        setLogs([{ text: `>>> 📂 正在拉起文件选择器，请选择工资表...`, level: 'SYSTEM' }]);
+        const r1 = await fetch('/api/dialog/file?title=' + encodeURIComponent('第一步：请选择工资表 (*.xlsx)'));
+        const d1 = await r1.json();
+        if (!d1.path) {
+           setLogs(prev => [...prev, { text: `>>> ❌ 未选择工资表，操作已安全终止。`, level: 'WARN' }]);
+           setIsRunning(false);
+           return;
+        }
+        setLogs(prev => [...prev, { text: `>>> ✅ 已选择工资表: ${d1.path}`, level: 'SUCCESS' }, { text: `>>> 📂 正在拉起文件选择器，请选择问题单剔除表...`, level: 'SYSTEM' }]);
+        const r2 = await fetch('/api/dialog/file?title=' + encodeURIComponent('第二步：请选择问题单剔除表 (*.xlsx)'));
+        const d2 = await r2.json();
+        if (!d2.path) {
+           setLogs(prev => [...prev, { text: `>>> ❌ 未选择问题单剔除表，操作已安全终止。`, level: 'WARN' }]);
+           setIsRunning(false);
+           return;
+        }
+        setLogs(prev => [...prev, { text: `>>> ✅ 已选择问题单剔除表: ${d2.path}`, level: 'SUCCESS' }, { text: `>>> ⚙️ 任务装载完毕，开始执行问题单剔除！`, level: 'INFO' }]);
+        currentConfig = { ...currentConfig, action: 'remove_problem_orders', sourcePath: d1.path };
+        targetPath = d2.path;
+      } catch (err) {
+        setLogs(prev => [...prev, { text: `>>> ❌ 弹窗拉起失败 (请确认 Python 后端服务是否正常启动): ${err}`, level: 'ERROR' }]);
+        setIsRunning(false);
+        return;
+      }
+    }
+
     if (action === 'raise_price' || action === 'remove_problem_orders') {
         // Handled above, currentConfig has targetPath
     }
@@ -752,21 +781,60 @@ export default function App() {
           {!['dashboard', 'parttime_details', 'salary_reissue', 'referral_internal', 'referral_field'].includes(activeMenu) && (
             <section className="flex-1 glass-panel-immersive rounded-[20px] cyber-border flex flex-col overflow-hidden min-h-0 animate-in fade-in slide-in-from-bottom-4 duration-500 delay-200 relative z-0" style={{ animation: 'glow-pulse 8s infinite ease-in-out' }}>
             
-            <div className="flex items-center justify-between px-8 pt-6 pb-4 shrink-0 border-b border-sky-500/10">
-              <div className="flex items-center gap-6">
-                <div className="flex items-center gap-3">
-                  <div className="relative flex h-3 w-3 items-center justify-center">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-sky-400 opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-sky-500"></span>
+            <div className="w-full shrink-0 border-b border-sky-500/10 px-8 pt-5 pb-3">
+              <div className="flex gap-8 w-full items-center">
+                <div className="flex-[6] min-w-0 max-w-[775px] flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="relative flex h-3 w-3 items-center justify-center">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-sky-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-sky-500"></span>
+                    </div>
+                    <span className="text-transparent bg-clip-text bg-gradient-to-r from-sky-100 to-sky-400 font-mono font-black text-[15px] tracking-[0.2em] uppercase relative top-[1px] drop-shadow-[0_0_8px_rgba(56,189,248,0.5)] animate-pulse">{theme.term_head}</span>
                   </div>
-                  <span className="text-transparent bg-clip-text bg-gradient-to-r from-sky-100 to-sky-400 font-mono font-black text-[15px] tracking-[0.2em] uppercase relative top-[1px] drop-shadow-[0_0_8px_rgba(56,189,248,0.5)] animate-pulse">{theme.term_head}</span>
+
+                  {activeMenu === 'core' && (
+                    <div className="flex items-center gap-4">
+                      <button 
+                        onClick={() => setAppConfig(prev => ({ ...prev, enableInterceptor: !prev.enableInterceptor }))}
+                        className={`group relative flex items-center gap-3 px-4 py-[6px] rounded-full border transition-all duration-300 backdrop-blur-md cursor-pointer overflow-hidden ${
+                          appConfig.enableInterceptor 
+                            ? 'border-emerald-500/40 bg-emerald-950/30 hover:bg-emerald-900/40 hover:border-emerald-400/60 shadow-[0_0_15px_rgba(52,211,153,0.15)]' 
+                            : 'border-slate-700/50 bg-slate-900/50 hover:bg-slate-800/80 hover:border-slate-600/80'
+                        }`}
+                      >
+                        {appConfig.enableInterceptor && (
+                          <div className="absolute inset-0 bg-gradient-to-r from-emerald-500/0 via-emerald-500/10 to-emerald-500/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000"></div>
+                        )}
+                        <div className={`w-2 h-2 rounded-full transition-all duration-300 relative z-10 ${
+                          appConfig.enableInterceptor 
+                            ? 'bg-emerald-400 shadow-[0_0_12px_rgba(52,211,153,0.9)] animate-pulse' 
+                            : 'bg-slate-600 group-hover:bg-slate-500'
+                        }`}></div>
+                        <span className={`text-[12px] tracking-widest font-mono uppercase transition-colors duration-300 relative z-10 ${
+                          appConfig.enableInterceptor 
+                            ? 'text-emerald-50 drop-shadow-[0_0_8px_rgba(52,211,153,0.6)] font-bold' 
+                            : 'text-slate-400 group-hover:text-slate-300 font-medium'
+                        }`}>防重单拦截</span>
+                       </button>
+
+                      <button 
+                        onClick={() => handleAction("remove_problem_orders_flow")} 
+                        className="group relative flex items-center gap-2.5 px-4 py-[6px] rounded-full border transition-all duration-300 backdrop-blur-md cursor-pointer overflow-hidden border-slate-700/50 bg-slate-900/50 hover:bg-slate-800/80 hover:border-sky-500/50 shadow-[0_0_10px_rgba(14,165,233,0)] hover:shadow-[0_0_15px_rgba(14,165,233,0.15)]"
+                      >
+                        <div className="absolute inset-0 bg-gradient-to-r from-sky-500/0 via-sky-500/10 to-sky-500/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700"></div>
+                        <Filter className="w-[14px] h-[14px] text-slate-400 group-hover:text-sky-400 transition-colors relative z-10 drop-shadow-[0_0_5px_rgba(14,165,233,0)] group-hover:drop-shadow-[0_0_8px_rgba(14,165,233,0.5)]" />
+                        <span className="text-[12px] font-bold tracking-widest text-slate-400 group-hover:text-sky-100 transition-colors relative z-10 uppercase font-mono drop-shadow-[0_0_2px_rgba(14,165,233,0)] group-hover:drop-shadow-[0_0_8px_rgba(14,165,233,0.5)]">问题单剔除</span>
+                      </button>
+                    </div>
+                  )}
                 </div>
-              </div>
-              <div className="flex items-center gap-3 h-[40px]">
-                <button onClick={() => handleAction("add_task_root")} title="挂载新的数据源" className="w-[40px] h-[40px] flex items-center justify-center glass-input hover:bg-sky-500/20 hover:text-sky-300 hover:border-sky-500/50 text-slate-400 rounded-xl transition-all text-[20px] font-bold shadow appearance-none">+</button>
-                <button onClick={() => handleAction("open_explorer")} title="打开文件所在目录" className="w-[40px] h-[40px] flex items-center justify-center glass-input hover:bg-sky-500/20 hover:border-sky-500/50 text-slate-400 rounded-xl transition-all shadow group border border-sky-500/20 bg-slate-900/50 hover:shadow-[0_0_15px_rgba(56,189,248,0.2)]">
-                  <FolderOpen className="w-5 h-5 text-sky-400/80 group-hover:text-white group-hover:scale-110 transition-all drop-shadow-[0_0_8px_rgba(56,189,248,0.5)]" />
-                </button>
+
+                <div className="flex-[4] min-w-0 flex items-center justify-end gap-3 h-[40px]">
+                  <button onClick={() => handleAction("add_task_root")} title="挂载新的数据源" className="w-[40px] h-[40px] flex items-center justify-center glass-input hover:bg-sky-500/20 hover:text-sky-300 hover:border-sky-500/50 text-slate-400 rounded-xl transition-all text-[20px] font-bold shadow appearance-none">+</button>
+                  <button onClick={() => handleAction("open_explorer")} title="打开文件所在目录" className="w-[40px] h-[40px] flex items-center justify-center glass-input hover:bg-sky-500/20 hover:border-sky-500/50 text-slate-400 rounded-xl transition-all shadow group border border-sky-500/20 bg-slate-900/50 hover:shadow-[0_0_15px_rgba(56,189,248,0.2)]">
+                    <FolderOpen className="w-5 h-5 text-sky-400/80 group-hover:text-white group-hover:scale-110 transition-all drop-shadow-[0_0_8px_rgba(56,189,248,0.5)]" />
+                  </button>
+                </div>
               </div>
             </div>
 

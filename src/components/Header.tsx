@@ -57,7 +57,7 @@ export function Header({ theme, onAction, city = '深圳' }: HeaderProps) {
             {theme.spin_frames[kiteFrame]}
           </span>
           <span className="tracking-[0.2em] ml-1 text-[15px] font-bold text-transparent bg-clip-text bg-gradient-to-r from-white to-sky-200 animate-breathe uppercase">
-            工资别跑，我还能算
+            告别公式的堆砌，让每一次核算都轻如羽毛。
           </span>
         </div>
 
