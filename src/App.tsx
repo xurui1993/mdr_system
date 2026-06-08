@@ -195,11 +195,10 @@ export default function App() {
     if (action === 'setup_problem_removal') {
       try {
         setLogs([{ text: `>>> 📂 正在拉起目录选择器，请选择工资表和问题单剔除表所在目录...`, level: 'SYSTEM' }]);
-        const response = await fetch('/api/dialog/folder?title=' + encodeURIComponent('选择包含工资表和问题单剔除表的目录'));
-        const data = await response.json();
-        if (data.path) {
-          setAppConfig(prev => ({ ...prev, problemRemovalPath: data.path }));
-          setLogs(prev => [...prev, { text: `>>> ✅ 成功挂载问题单剔除参考目录: ${data.path}`, level: 'SUCCESS' }]);
+        const userPath = window.prompt('选择包含工资表和问题单剔除表的目录', appConfig.problemRemovalPath || '/mock/data');
+        if (userPath) {
+          setAppConfig(prev => ({ ...prev, problemRemovalPath: userPath }));
+          setLogs(prev => [...prev, { text: `>>> ✅ 成功挂载问题单剔除参考目录: ${userPath}`, level: 'SUCCESS' }]);
           showToast('剔除参考目录已挂载', 'success');
         } else {
           setAppConfig(prev => ({ ...prev, enableProblemRemoval: false }));
@@ -216,13 +215,11 @@ export default function App() {
       try {
         setLogs([{ text: `>>> 📂 正在拉起目录选择器，请选择包含已核算工资表的文件夹目录...`, level: 'SYSTEM' }]);
         setIsRunning(false);
-        const dialogEndpoint = '/api/dialog/folder?title=' + encodeURIComponent('选择包含已核算工资表的文件夹');
-        const response = await fetch(dialogEndpoint);
-        const data = await response.json();
+        const userPath = window.prompt('选择包含已核算工资表的文件夹', appConfig.sourcePath || '/mock/data');
         
-        if (data.path) {
-          setAppConfig(prev => ({ ...prev, sourcePath: data.path }));
-          setLogs(prev => [...prev, { text: `>>> ✅ 成功读取目录: ${data.path}`, level: 'SUCCESS' }]);
+        if (userPath) {
+          setAppConfig(prev => ({ ...prev, sourcePath: userPath }));
+          setLogs(prev => [...prev, { text: `>>> ✅ 成功读取目录: ${userPath}`, level: 'SUCCESS' }]);
         } else {
           setLogs(prev => [...prev, { text: `>>> ❌ 未选择目标目录，操作已安全终止。`, level: 'WARN' }]);
         }
@@ -247,15 +244,12 @@ export default function App() {
         } else {
           setLogs([{ text: `>>> 📊 正在拉起目录选择器，请选择要合并已发的兼职文件夹目录...`, level: 'SYSTEM' }]);
           
-          const dialogEndpoint = '/api/dialog/folder?title=' + encodeURIComponent('选择要合并已发的兼职文件夹目录');
-          const response = await fetch(dialogEndpoint);
-          const data = await response.json();
-          if (data.path) {
-            currentConfig = { ...currentConfig, sourcePath: data.path };
-            setLogs(prev => [...prev, { text: `>>> ✅ 成功读取目录: ${data.path} ，任务装载完毕，开始合并！`, level: 'SUCCESS' }]);
+          const userPath = window.prompt('选择要合并已发的兼职文件夹目录', currentConfig.sourcePath || '/mock/data');
+          if (userPath) {
+            currentConfig = { ...currentConfig, sourcePath: userPath };
+            setLogs(prev => [...prev, { text: `>>> ✅ 成功读取目录: ${userPath} ，任务装载完毕，开始合并！`, level: 'SUCCESS' }]);
           } else {
-            const errorMsg = data.error ? ` (系统异常: ${data.error})` : '';
-            setLogs(prev => [...prev, { text: `>>> ❌ 未选择目标目录，操作已安全终止。${errorMsg}`, level: 'WARN' }]);
+            setLogs(prev => [...prev, { text: `>>> ❌ 未选择目标目录，操作已安全终止。`, level: 'WARN' }]);
             setIsRunning(false);
             return;
           }
@@ -267,66 +261,37 @@ export default function App() {
       }
     } else if (action === 'open_config') {
       try {
-        setLogs([{ text: `>>> 🛠️ 正在尝试打开配置表 (config.xlsx)...`, level: 'INFO' }]);
-        const response = await fetch(`/api/open/config?path=${encodeURIComponent(appConfig.basePath)}`);
-        const data = await response.json();
-        
-        if (data.success) {
-          setLogs(prev => [...prev, { text: `>>> ✅ ${data.msg}`, level: 'SUCCESS' }]);
-          showToast('成功打开配置文件', 'success');
-          setIsRunning(false);
-          return;
-        } else if (data.exists) {
-          setLogs(prev => [...prev, { text: `>>> ❌ 打开失败: ${data.msg}`, level: 'ERROR' }]);
-          showToast(`打开失败: ${data.msg}`, 'error');
-          setIsRunning(false);
-          return;
-        }
-
-        // if the file does not exist
-        setLogs(prev => [...prev, { text: `>>> ❌ 未能在当前挂载盘找到 config.xlsx，请重新选择配置文件...`, level: 'WARN' }]);
-        showToast('未找到配置文件，请重新选择', 'warn');
-        const r = await fetch('/api/dialog/file?title=' + encodeURIComponent('选择 config.xlsx 配置文件'));
-        const d = await r.json();
-        if (d.path) {
-          setAppConfig(prev => ({ ...prev, basePath: d.path }));
-          setLogs(prev => [...prev, { text: `>>> ✅ 挂载配置路径已更新: ${d.path}`, level: 'SUCCESS' }]);
+        setLogs([{ text: `>>> 🛠️ 正在拉起文件选择弹窗...`, level: 'INFO' }]);
+        const userPath = window.prompt("请手动输入或选择配置文件(config.xlsx)路径", appConfig.basePath || 'C:/Users/config.xlsx');
+        if (userPath) {
+          setAppConfig(prev => ({ ...prev, basePath: userPath }));
+          setLogs(prev => [...prev, { text: `>>> ✅ 挂载配置路径已手动更新: ${userPath}`, level: 'SUCCESS' }]);
           showToast('配置路径已更新', 'success');
         } else {
           setLogs(prev => [...prev, { text: `>>> ❌ 操作已取消`, level: 'WARN' }]);
           showToast('操作已取消', 'info');
         }
       } catch (err) {
-        setLogs(prev => [...prev, { text: `>>> ❌ 服务连接失败 (请确认 Python 后端服务是否正常启动): ${err}`, level: 'ERROR' }]);
+        setLogs(prev => [...prev, { text: `>>> ❌ 服务连接失败: ${err}`, level: 'ERROR' }]);
+        showToast('服务连接失败', 'error');
       }
       setIsRunning(false);
       return;
     } else if (action === 'open_source') {
       try {
         setLogs([{ text: `>>> 📁 [系统交互] 正在拉起本地目录选择器...`, level: 'INFO' }]);
-        const smartResp = await fetch(`/api/dialog/smart_source?basePath=${encodeURIComponent(appConfig.basePath)}`);
-        const smartData = await smartResp.json();
-        
-        if (smartData.smart && smartData.path) {
-          setAppConfig(prev => ({ ...prev, sourcePath: smartData.path }));
-          setLogs(prev => [...prev, { text: `>>> ✅ 检测到爬虫下载目录，已自动映射数据源: ${smartData.path}`, level: 'SUCCESS' }]);
-          showToast('已自动映射数据源', 'success');
+        const userPath = window.prompt("请手动输入或选择数据源文件夹路径", appConfig.sourcePath || 'C:/Users/Downloads/data');
+        if (userPath) {
+          setAppConfig(prev => ({ ...prev, sourcePath: userPath }));
+          setLogs(prev => [...prev, { text: `>>> ✅ 数据源路径已手动更新: ${userPath}`, level: 'SUCCESS' }]);
+          showToast('数据源已更新: ' + userPath, 'success');
         } else {
-          setLogs(prev => [...prev, { text: `>>> ⚠️ 未检测到爬虫数据，尝试手动选择数据源...`, level: 'WARN' }]);
-          const response = await fetch('/api/dialog/folder?title=' + encodeURIComponent('未发现爬虫下载目录，请自行选择数据源文件夹'));
-          const data = await response.json();
-          if (data.path) {
-            setAppConfig(prev => ({ ...prev, sourcePath: data.path }));
-            setLogs(prev => [...prev, { text: `>>> ✅ 数据源路径已手动更新: ${data.path}`, level: 'SUCCESS' }]);
-            showToast('数据源已更新: ' + data.path, 'success');
-          } else {
-            setLogs(prev => [...prev, { text: `>>> ❌ 未选择路径或操作已取消`, level: 'WARN' }]);
-            showToast('未选择路径，操作已取消', 'info');
-          }
+          setLogs(prev => [...prev, { text: `>>> ❌ 未选择路径或操作已取消`, level: 'WARN' }]);
+          showToast('未选择路径，操作已取消', 'info');
         }
       } catch (err) {
-        setLogs(prev => [...prev, { text: `>>> ❌ 弹窗拉起失败 (请确认 Python 后端服务是否正常启动): ${err}`, level: 'ERROR' }]);
-        showToast('服务连接失败', 'error');
+        setLogs(prev => [...prev, { text: `>>> ❌ 弹窗拉起失败: ${err}`, level: 'ERROR' }]);
+        showToast('弹窗拉起失败', 'error');
       }
       setIsRunning(false);
       return;
@@ -337,18 +302,17 @@ export default function App() {
     } else if (action === 'open_workspace') {
       try {
         setLogs([{ text: `>>> 📁 [系统交互] 正在拉起工作空间目录选择器...`, level: 'INFO' }]);
-        const response = await fetch('/api/dialog/folder?title=' + encodeURIComponent('选择个人工作空间目录'));
-        const data = await response.json();
-        if (data.path) {
-          setAppConfig(prev => ({ ...prev, workspacePath: data.path }));
-          setLogs(prev => [...prev, { text: `>>> ✅ 个人工作空间已更新: ${data.path}`, level: 'SUCCESS' }]);
+        const userPath = window.prompt("选择个人工作空间目录", appConfig.workspacePath || "C:/Users/Workspace");
+        if (userPath) {
+          setAppConfig(prev => ({ ...prev, workspacePath: userPath }));
+          setLogs(prev => [...prev, { text: `>>> ✅ 个人工作空间已更新: ${userPath}`, level: 'SUCCESS' }]);
           showToast('工作空间已更新', 'success');
         } else {
           setLogs(prev => [...prev, { text: `>>> ❌ 未选择路径或操作已取消`, level: 'WARN' }]);
           showToast('操作已取消', 'info');
         }
       } catch (err) {
-        setLogs(prev => [...prev, { text: `>>> ❌ 弹窗拉起失败 (请确认 Python 后端服务是否正常启动): ${err}`, level: 'ERROR' }]);
+        setLogs(prev => [...prev, { text: `>>> ❌ 弹窗拉起失败: ${err}`, level: 'ERROR' }]);
         showToast('服务连接失败', 'error');
       }
       setIsRunning(false);
@@ -372,11 +336,10 @@ export default function App() {
       return;
     } else if (action === 'add_task_root') {
       try {
-        const response = await fetch('/api/dialog/folder?title=' + encodeURIComponent('挂载新的数据卷'));
-        const data = await response.json();
-        if (data.path) {
-          setAppConfig(prev => ({ ...prev, sourcePath: data.path }));
-          setLogs(prev => [...prev, { text: `>>> ✅ 新的数据卷已挂载: ${data.path}`, level: 'SUCCESS' }]);
+        const userPath = window.prompt("挂载新的数据卷", appConfig.sourcePath || "/mock/data");
+        if (userPath) {
+          setAppConfig(prev => ({ ...prev, sourcePath: userPath }));
+          setLogs(prev => [...prev, { text: `>>> ✅ 新的数据卷已挂载: ${userPath}`, level: 'SUCCESS' }]);
           showToast('数据卷挂载成功', 'success');
         } else {
           setLogs(prev => [...prev, { text: `>>> ❌ 未选择路径或操作已取消`, level: 'WARN' }]);
@@ -410,15 +373,12 @@ export default function App() {
         if (!appConfig.sourcePath || appConfig.sourcePath === './data' || appConfig.sourcePath === '.') {
           setLogs([{ text: `>>> 📂 正在拉起目录选择器，请选择包含待处理发薪支付数据的文件夹...`, level: 'SYSTEM' }]);
           
-          const dialogEndpoint = '/api/dialog/folder?title=' + encodeURIComponent('选择包含待处理发薪支付数据的文件夹目录');
-          const response = await fetch(dialogEndpoint);
-          const data = await response.json();
-          if (data.path) {
-            currentConfig = { ...currentConfig, action: 'salary_bind', sourcePath: data.path };
-            setLogs(prev => [...prev, { text: `>>> ✅ 成功读取目录: ${data.path} ，任务装载完毕，开始执行发薪绑定！`, level: 'SUCCESS' }]);
+          const userPath = window.prompt("选择包含待处理发薪支付数据的文件夹目录", currentConfig.sourcePath || "/mock/data");
+          if (userPath) {
+            currentConfig = { ...currentConfig, action: 'salary_bind', sourcePath: userPath };
+            setLogs(prev => [...prev, { text: `>>> ✅ 成功读取目录: ${userPath} ，任务装载完毕，开始执行发薪绑定！`, level: 'SUCCESS' }]);
           } else {
-            const errorMsg = data.error ? ` (系统异常: ${data.error})` : '';
-            setLogs(prev => [...prev, { text: `>>> ❌ 未选择目标目录，操作已安全终止。${errorMsg}`, level: 'WARN' }]);
+            setLogs(prev => [...prev, { text: `>>> ❌ 未选择目标目录，操作已安全终止。`, level: 'WARN' }]);
             setIsRunning(false);
             return;
           }
@@ -522,12 +482,11 @@ export default function App() {
           appendLog(`[INFO] 检测到爬虫数据，已自动映射数据源目录: ${smartData.path}`, 'INFO');
         } else {
           appendLog(`[WARN] 未检测到【爬虫下载】目录，无法直接运行，请指定数据源...`, 'WARN');
-          const response = await fetch('/api/dialog/folder?title=' + encodeURIComponent('请自行选择数据源文件夹'));
-          const data = await response.json();
-          if (data.path) {
-            effectiveConfig.sourcePath = data.path;
-            setAppConfig(prev => ({ ...prev, sourcePath: data.path }));
-            appendLog(`[INFO] 数据源已挂载: ${data.path}`, 'INFO');
+          const userPath = window.prompt("请手动输入或自行选择数据源文件夹目录", effectiveConfig.sourcePath || "/mock/data");
+          if (userPath) {
+            effectiveConfig.sourcePath = userPath;
+            setAppConfig(prev => ({ ...prev, sourcePath: userPath }));
+            appendLog(`[INFO] 数据源已挂载: ${userPath}`, 'INFO');
           } else {
             appendLog(`[ERROR] 用户取消了数据源选择，核心运行终止。`, 'ERROR');
             setIsRunning(false);

@@ -26,7 +26,7 @@ async function startServer() {
   });
 
   app.get("/api/dialog/smart_source", (req, res) => {
-    res.json({ path: "/mock/downloads/data", error: "", smart: true });
+    res.json({ path: "", error: "", smart: false });
   });
 
   app.get("/api/dialog/file", (req, res) => {
@@ -38,7 +38,7 @@ async function startServer() {
   });
 
   app.get("/api/open/config", (req, res) => {
-    res.json({ success: true, msg: "配置打开成功", exists: true });
+    res.json({ success: false, msg: "配置不存在", exists: false });
   });
 
   app.get("/api/open/explorer", (req, res) => {
