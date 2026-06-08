@@ -78,6 +78,43 @@ import { AbnormalResignationActionPanel } from './components/AbnormalResignation
 
 import { DashboardPanel } from './components/DashboardPanel';
 
+// File selection helpers
+const pickFile = (): Promise<string | null> => {
+  return new Promise((resolve) => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.xlsx';
+    input.onchange = (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0];
+      if (file) {
+        resolve(file.name);
+      } else {
+        resolve(null);
+      }
+    };
+    input.click();
+  });
+};
+
+const pickDirectory = (): Promise<string | null> => {
+  return new Promise((resolve) => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    // @ts-ignore
+    input.webkitdirectory = true;
+    input.onchange = (e) => {
+      const files = (e.target as HTMLInputElement).files;
+      if (files && files.length > 0) {
+        const pathParts = files[0].webkitRelativePath.split('/');
+        resolve('/mock/uploads/' + pathParts[0]);
+      } else {
+        resolve(null);
+      }
+    };
+    input.click();
+  });
+};
+
 export default function App() {
   const theme = THEMES[0];
   
@@ -195,7 +232,7 @@ export default function App() {
     if (action === 'setup_problem_removal') {
       try {
         setLogs([{ text: `>>> 📂 正在拉起目录选择器，请选择工资表和问题单剔除表所在目录...`, level: 'SYSTEM' }]);
-        const userPath = window.prompt('选择包含工资表和问题单剔除表的目录', appConfig.problemRemovalPath || '/mock/data');
+        const userPath = await pickDirectory();
         if (userPath) {
           setAppConfig(prev => ({ ...prev, problemRemovalPath: userPath }));
           setLogs(prev => [...prev, { text: `>>> ✅ 成功挂载问题单剔除参考目录: ${userPath}`, level: 'SUCCESS' }]);
@@ -215,7 +252,7 @@ export default function App() {
       try {
         setLogs([{ text: `>>> 📂 正在拉起目录选择器，请选择包含已核算工资表的文件夹目录...`, level: 'SYSTEM' }]);
         setIsRunning(false);
-        const userPath = window.prompt('选择包含已核算工资表的文件夹', appConfig.sourcePath || '/mock/data');
+        const userPath = await pickDirectory();
         
         if (userPath) {
           setAppConfig(prev => ({ ...prev, sourcePath: userPath }));
@@ -244,7 +281,7 @@ export default function App() {
         } else {
           setLogs([{ text: `>>> 📊 正在拉起目录选择器，请选择要合并已发的兼职文件夹目录...`, level: 'SYSTEM' }]);
           
-          const userPath = window.prompt('选择要合并已发的兼职文件夹目录', currentConfig.sourcePath || '/mock/data');
+          const userPath = await pickDirectory();
           if (userPath) {
             currentConfig = { ...currentConfig, sourcePath: userPath };
             setLogs(prev => [...prev, { text: `>>> ✅ 成功读取目录: ${userPath} ，任务装载完毕，开始合并！`, level: 'SUCCESS' }]);
@@ -262,7 +299,7 @@ export default function App() {
     } else if (action === 'open_config') {
       try {
         setLogs([{ text: `>>> 🛠️ 正在拉起文件选择弹窗...`, level: 'INFO' }]);
-        const userPath = window.prompt("请手动输入或选择配置文件(config.xlsx)路径", appConfig.basePath || 'C:/Users/config.xlsx');
+        const userPath = await pickFile();
         if (userPath) {
           setAppConfig(prev => ({ ...prev, basePath: userPath }));
           setLogs(prev => [...prev, { text: `>>> ✅ 挂载配置路径已手动更新: ${userPath}`, level: 'SUCCESS' }]);
@@ -280,7 +317,7 @@ export default function App() {
     } else if (action === 'open_source') {
       try {
         setLogs([{ text: `>>> 📁 [系统交互] 正在拉起本地目录选择器...`, level: 'INFO' }]);
-        const userPath = window.prompt("请手动输入或选择数据源文件夹路径", appConfig.sourcePath || 'C:/Users/Downloads/data');
+        const userPath = await pickDirectory();
         if (userPath) {
           setAppConfig(prev => ({ ...prev, sourcePath: userPath }));
           setLogs(prev => [...prev, { text: `>>> ✅ 数据源路径已手动更新: ${userPath}`, level: 'SUCCESS' }]);
@@ -302,7 +339,7 @@ export default function App() {
     } else if (action === 'open_workspace') {
       try {
         setLogs([{ text: `>>> 📁 [系统交互] 正在拉起工作空间目录选择器...`, level: 'INFO' }]);
-        const userPath = window.prompt("选择个人工作空间目录", appConfig.workspacePath || "C:/Users/Workspace");
+        const userPath = await pickDirectory();
         if (userPath) {
           setAppConfig(prev => ({ ...prev, workspacePath: userPath }));
           setLogs(prev => [...prev, { text: `>>> ✅ 个人工作空间已更新: ${userPath}`, level: 'SUCCESS' }]);
@@ -336,7 +373,7 @@ export default function App() {
       return;
     } else if (action === 'add_task_root') {
       try {
-        const userPath = window.prompt("挂载新的数据卷", appConfig.sourcePath || "/mock/data");
+        const userPath = await pickDirectory();
         if (userPath) {
           setAppConfig(prev => ({ ...prev, sourcePath: userPath }));
           setLogs(prev => [...prev, { text: `>>> ✅ 新的数据卷已挂载: ${userPath}`, level: 'SUCCESS' }]);
@@ -373,7 +410,7 @@ export default function App() {
         if (!appConfig.sourcePath || appConfig.sourcePath === './data' || appConfig.sourcePath === '.') {
           setLogs([{ text: `>>> 📂 正在拉起目录选择器，请选择包含待处理发薪支付数据的文件夹...`, level: 'SYSTEM' }]);
           
-          const userPath = window.prompt("选择包含待处理发薪支付数据的文件夹目录", currentConfig.sourcePath || "/mock/data");
+          const userPath = await pickDirectory();
           if (userPath) {
             currentConfig = { ...currentConfig, action: 'salary_bind', sourcePath: userPath };
             setLogs(prev => [...prev, { text: `>>> ✅ 成功读取目录: ${userPath} ，任务装载完毕，开始执行发薪绑定！`, level: 'SUCCESS' }]);
@@ -482,7 +519,7 @@ export default function App() {
           appendLog(`[INFO] 检测到爬虫数据，已自动映射数据源目录: ${smartData.path}`, 'INFO');
         } else {
           appendLog(`[WARN] 未检测到【爬虫下载】目录，无法直接运行，请指定数据源...`, 'WARN');
-          const userPath = window.prompt("请手动输入或自行选择数据源文件夹目录", effectiveConfig.sourcePath || "/mock/data");
+          const userPath = await pickDirectory();
           if (userPath) {
             effectiveConfig.sourcePath = userPath;
             setAppConfig(prev => ({ ...prev, sourcePath: userPath }));
