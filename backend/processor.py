@@ -1133,7 +1133,7 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                 df_sht2['往期累计核算记录'] = df_sht2.apply(get_past_notes, axis=1)
                 df_sht2['往期月费是否已扣'] = df_sht2.apply(get_past_fee_deducted, axis=1)
 
-                custom_deductions = [str(c) for c in df_rules.columns if c in ["安全基金", "使用费", "非蜂卡", "月费"] and pd.to_numeric(df_rules[c], errors='coerce').fillna(0).abs().sum() > 0]
+                custom_deductions = [str(c) for c in df_rules.columns if c not in ["城市", "团队名称", "团队ID"] and not str(c).endswith("_maxDays") and not str(c).endswith("_isKw")]
                 
                 cfg_team = next((c for c in df_rules.columns if "团队名称" in str(c) and "maxDays" not in str(c)), None)
                 if cfg_team:
@@ -1161,6 +1161,18 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                     df_sht2 = pd.merge(df_sht2, df_rules_sub, left_on='_mapped_tid', right_on='_cfg_team', how='left')
                     df_sht2 = df_sht2.drop(columns=['_mapped_tid'])
                 
+                filtered_custom_deductions = []
+                for d_col in custom_deductions:
+                    if d_col in ["安全基金", "使用费", "非蜂卡", "月费"]:
+                        if d_col in df_sht2.columns:
+                            if pd.to_numeric(df_sht2[d_col], errors='coerce').fillna(0).abs().sum() == 0:
+                                df_sht2 = df_sht2.drop(columns=[d_col])
+                                continue
+                        else:
+                            continue
+                    filtered_custom_deductions.append(d_col)
+                custom_deductions = filtered_custom_deductions
+
                 for d_col in custom_deductions:
                     if d_col not in df_sht2.columns:
                         df_sht2[d_col] = 0
@@ -2036,7 +2048,7 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                 df_sht2['往期累计核算记录'] = df_sht2.apply(get_past_notes, axis=1)
                 df_sht2['往期月费是否已扣'] = df_sht2.apply(get_past_fee_deducted, axis=1)
 
-                custom_deductions = [str(c) for c in df_rules.columns if c in ["安全基金", "使用费", "非蜂卡", "月费"] and pd.to_numeric(df_rules[c], errors='coerce').fillna(0).abs().sum() > 0]
+                custom_deductions = [str(c) for c in df_rules.columns if c not in ["城市", "团队名称", "团队ID"] and not str(c).endswith("_maxDays") and not str(c).endswith("_isKw")]
                 
                 cfg_team = next((c for c in df_rules.columns if "团队名称" in str(c) and "maxDays" not in str(c)), None)
                 if cfg_team:
@@ -2064,6 +2076,18 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                     df_sht2 = pd.merge(df_sht2, df_rules_sub, left_on='_mapped_tid', right_on='_cfg_team', how='left')
                     df_sht2 = df_sht2.drop(columns=['_mapped_tid'])
                 
+                filtered_custom_deductions = []
+                for d_col in custom_deductions:
+                    if d_col in ["安全基金", "使用费", "非蜂卡", "月费"]:
+                        if d_col in df_sht2.columns:
+                            if pd.to_numeric(df_sht2[d_col], errors='coerce').fillna(0).abs().sum() == 0:
+                                df_sht2 = df_sht2.drop(columns=[d_col])
+                                continue
+                        else:
+                            continue
+                    filtered_custom_deductions.append(d_col)
+                custom_deductions = filtered_custom_deductions
+
                 for d_col in custom_deductions:
                     if d_col not in df_sht2.columns:
                         df_sht2[d_col] = 0

@@ -415,6 +415,36 @@ export function DeductionConfigPanel({ theme }: DeductionConfigProps) {
     }));
   };
 
+  const syncSiteConfigToCity = () => {
+    if (!selectedCityId || !selectedSiteId) return;
+    const city = data.find(c => c.id === selectedCityId);
+    if (!city) return;
+    const site = city.sites.find(s => s.id === selectedSiteId);
+    if (!site) return;
+
+    if (!window.confirm(`确定要将【${site.name}】的规则配置覆盖到【${city.name}】下的所有站点吗？`)) {
+      return;
+    }
+
+    const currentItems = JSON.parse(JSON.stringify(site.deductionItems || []));
+
+    setData(prev => prev.map(c => {
+      if (c.id !== selectedCityId) return c;
+      return {
+        ...c,
+        sites: c.sites.map(s => ({
+          ...s,
+          deductionItems: JSON.parse(JSON.stringify(currentItems))
+        }))
+      };
+    }));
+
+    setPendingLogs(prev => [
+      { id: Date.now().toString(), timestamp: new Date().toLocaleTimeString(), content: `将【${site.name}】的规则同步至【${city.name}】所有站点` },
+      ...prev
+    ]);
+  };
+
   const updateItem = (itemId: string, updates: Partial<DeductionItem>) => {
     if (!selectedCityId || !selectedSiteId) return;
     
@@ -733,10 +763,20 @@ export function DeductionConfigPanel({ theme }: DeductionConfigProps) {
                )}
             </div>
             {selectedSiteId && (
-              <button onClick={addItem} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-indigo-600 bg-indigo-50 dark:bg-indigo-500/10 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-500/20 rounded-lg transition-colors">
-                <Plus size={14} />
-                添加规则
-              </button>
+              <div className="flex items-center gap-2">
+                <button 
+                  onClick={syncSiteConfigToCity}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-emerald-600 bg-emerald-50 dark:bg-emerald-500/10 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-500/20 rounded-lg transition-colors"
+                  title="将当前站点的规则同步到当前城市下的所有站点"
+                >
+                  <FileSpreadsheet size={14} />
+                  同步至全城站点
+                </button>
+                <button onClick={addItem} className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-indigo-600 bg-indigo-50 dark:bg-indigo-500/10 dark:text-indigo-400 hover:bg-indigo-100 dark:hover:bg-indigo-500/20 rounded-lg transition-colors">
+                  <Plus size={14} />
+                  添加规则
+                </button>
+              </div>
             )}
           </div>
 
