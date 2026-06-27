@@ -63,11 +63,12 @@ def load_json_config(file_path: str) -> dict:
 
 
 class SpiderEngine:
-    def __init__(self, config, base_dir=".", target_cities=None):
+    def __init__(self, config, base_dir=".", target_cities=None, log_cb=print):
         # 处理逻辑：类实例对象的属性及配置初始化构建
         self.config = config
-        self.base_dir = os.path.join(base_dir, "Aeolus_Data")
+        self.base_dir = base_dir
         self.session = requests.Session()
+        self.log_cb = log_cb
         self._init_headers()
         
         # 接口地址
@@ -107,10 +108,10 @@ class SpiderEngine:
         try:
             res = self.session.post(self.switch_city_url, json=city_data)
             res.raise_for_status()
-            print(f"[系统] 已成功切换至城市: {city_name} (ID: {city_code})")
+            self.log_cb(f"[系统] 已成功切换至城市: {city_name} (ID: {city_code})")
             return True
         except Exception as e:
-            print(f"[错误] 切换城市 {city_name} 失败: {str(e)}")
+            self.log_cb(f"[错误] 切换城市 {city_name} 失败: {str(e)}")
             return False
 
     def time_stamp(self,date_str):
@@ -162,21 +163,22 @@ class SpiderEngine:
                 }
             }
         }
-        print(f"[导出] 正在请求 {city_name} 的运单数据...")
+        self.log_cb(f"[导出] 正在请求 {city_name} 的运单数据...")
         export_res = self.session.post(self.export_url, json=res_body)
         export_res.raise_for_status()
-        max_retries = 60
+        max_retries = 150
         for i in range(max_retries):
-            time.sleep(10)
+            # 防止恶意访问风险，使用随机休眠
+            time.sleep(random.uniform(3.0, 5.5))
             page_res = self.session.post(self.page_url, json={"params": {"request": {"current":1,"pageSize":20}}})
             page_res.raise_for_status()
             re_data = json.loads(page_res.text)["result"]["data"]["data"][0]
             if re_data["statusDesc"] == "导出成功":
                 self._download_file(re_data["id"],file_path)
-                print("[导出] 成功,处理中.........")
+                self.log_cb("[导出] 成功,处理中.........")
                 return file_path
             else:
-                print("[导出] 进行中，请等待..........")
+                self.log_cb("[导出] 进行中，请等待..........")
                 continue 
 
     def _download_file(self, file_id, save_path):
@@ -197,12 +199,12 @@ class SpiderEngine:
                     for chunk in response.iter_content(chunk_size=1024):
                         if chunk:
                             file.write(chunk)
-                print("[下载] 运单数据下载成功")
-                print("------------"*10)
+                self.log_cb("[下载] 运单数据下载成功")
+                self.log_cb("------------"*10)
             else:
-                print(f"请求失败，状态码: {response.status_code}")
+                self.log_cb(f"请求失败，状态码: {response.status_code}")
         except Exception as e:
-            print(f"下载文件时出错: {e}")
+            self.log_cb(f"下载文件时出错: {e}")
 
     def download_data(self,res,file_path):
         # 处理逻辑：网络请求或爬虫抓取接口，下载外部业务数据
@@ -215,8 +217,8 @@ class SpiderEngine:
                     for chunk in res.iter_content(chunk_size=8192):
                         if chunk:
                             f.write(chunk)
-                    print("[下载] 服务奖惩下载成功")
-                    print("------------"*10)
+                    self.log_cb("[下载] 服务奖惩下载成功")
+                    self.log_cb("------------"*10)
                 logging.info(f"文件已成功下载到: {file_path}")
                 return True
         except Exception as e:
@@ -254,14 +256,14 @@ class SpiderEngine:
                 "appealStatus":[]
                 }
                 }}
-        print(f"[导出] 正在请求 {city_name} 服务奖惩...")
+        self.log_cb(f"[导出] 正在请求 {city_name} 服务奖惩...")
         bad_unit_text = self.session.post(self.bad_unit_url,json=bad_unit_data).text
         bad_unit_json = json.loads(bad_unit_text)
 
         if bad_unit_json["code"] == 200:
             bad_unit_url = bad_unit_json["result"]["data"]["fileUrl"]
             if bad_unit_url == "":
-                print("该周期无坏单数据")
+                self.log_cb("该周期无坏单数据")
                 empty_df = pd.DataFrame(columns=new_column)
                 empty_df.to_excel(file_path_xlsx, index=False)
                 return file_path_xlsx
@@ -290,16 +292,21 @@ class SpiderEngine:
 
     def run(self, start_time, end_time):
         # 处理逻辑：作为核心异步任务入口，负责启动具体的业务流程计算
-        print(f"[日期] {start_time}至{end_time}")
-        if self.handoff_city(self.target_cities):
+        self.log_cb(f"[日期] {start_time}至{end_time}")
+        if getattr(self, '_city_switched', False):
+            waybill_path = self.all_waybill_export(self.target_cities, start_time, end_time)
+            bad_unit_path = self.all_bad_unit_export(self.target_cities, start_time, end_time)
+            return waybill_path, bad_unit_path
+        elif self.handoff_city(self.target_cities):
+                self._city_switched = True
                 sleep_time = random.uniform(2, 5)
-                print(f"休息 {sleep_time:.2f} 秒...")
+                self.log_cb(f"休息 {sleep_time:.2f} 秒...")
                 time.sleep(sleep_time)
                 waybill_path = self.all_waybill_export(self.target_cities, start_time, end_time)
                 bad_unit_path = self.all_bad_unit_export(self.target_cities, start_time, end_time)
                 return waybill_path,bad_unit_path
         else:
-            print(f"[跳过] {self.target_cities} 城市切换失败")
+            self.log_cb(f"[跳过] {self.target_cities} 城市切换失败")
             sys.exit(1)
 
 
@@ -498,7 +505,7 @@ class DBWriter:
         self.city_name = city_name
         self.start_time = start_time
         self.end_time = end_time
-        self.base_dir = os.path.join(base_dir, "Aeolus_Data")
+        self.base_dir = base_dir
 
     def file_path(self,path_type):
         # 处理逻辑：处理文件或目录的选择交互及路径解析
@@ -545,18 +552,18 @@ class MergerFiles:
         else:
            self.year = str(date.year)
            self.month = f"{date.month:02d}" 
-        self.files_path = os.path.join(base_dir, "Aeolus_Data", self.city_name)
+        self.files_path = os.path.join(base_dir, self.city_name)
 
-    def merge_files(self,folder_name):
+    def merge_files(self,folder_name, log_cb=print):
         # 处理逻辑：处理文件或目录的选择交互及路径解析
         files_path = os.path.join(self.files_path, folder_name, self.year, self.month)
         output_filename = os.path.join(files_path, f"{self.year[2:]}年{self.month}月{folder_name}.xlsx")
-        print(files_path)
+        
         pattern = os.path.join(files_path, "*.xlsx")
         files = glob.glob(pattern)
         if output_filename in files:
             os.remove(output_filename)
-        print(f"找到 {len(files)} 个文件，开始合并...")
+        log_cb(f"找到 {len(files)} 个文件，开始合并...", "INFO")
         
         df_list = []
         for file in files:
@@ -567,23 +574,23 @@ class MergerFiles:
                     df = pd.read_excel(file,engine="openpyxl",converters={"运单号":str})
                 df_list.append(df)
             except Exception as e:
-                print(f"读取文件 {os.path.basename(file)} 失败: {e}")
+                log_cb(f"读取文件 {os.path.basename(file)} 失败: {e}", "ERROR")
 
         if not df_list:
-            print("没有成功读取到任何数据。")
+            log_cb("没有成功读取到任何数据。", "WARNING")
             return
 
         merged_df = pd.concat(df_list, ignore_index=True)
         merged_df.to_excel(output_filename, index=False)
-        print(f"合并完成！结果已保存至: {output_filename}")
-        print(f"共合并 {len(merged_df)} 行数据。")
+        log_cb(f"合并完成！结果已保存至: {output_filename}", "INFO")
+        log_cb(f"共合并 {len(merged_df)} 行数据。", "INFO")
         return merged_df
 
-    def run(self,type_list):
+    def run(self,type_list, log_cb=print):
         # 处理逻辑：作为核心异步任务入口，负责启动具体的业务流程计算
         data_dcit = {}
         for type in type_list:
-            data = self.merge_files(type)
+            data = self.merge_files(type, log_cb=log_cb)
             data_dcit[type] = data  
         return data_dcit
 
@@ -600,7 +607,6 @@ class MergePenaltyRecords:
         self.city_name = city_name
         self.year = date.split('-')[0]
         self.month = date.split('-')[1]
-        base_dir = os.path.join(base_dir, "Aeolus_Data")
         city_dir = os.path.join(base_dir, city_name)
         city_dir = os.path.join(city_dir, "汇总")
         year_dir = os.path.join(city_dir, self.year)
@@ -770,7 +776,14 @@ async def run_issue_orders_task(config, base_path, log_cb, progress_cb, finish_c
                 type_list = ["差评","投诉","物流责","超时","索赔","欺诈单"]
             
             mun = 5
-            engine = SpiderEngine(config, base_dir=base_path, target_cities=city_name)
+            project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            actual_base_dir = os.path.abspath(os.path.join(project_root, "..", "outputs", "问题单生成"))
+            os.makedirs(actual_base_dir, exist_ok=True)
+            
+            engine = SpiderEngine(config, base_dir=actual_base_dir, target_cities=city_name, log_cb=lambda msg: log_cb(msg, "INFO"))
+            
+            # Dictionary to collect all chunk DataFrames in memory
+            merged_results = {t: [] for t in type_list}
             
             if len(dates) > mun:
                 for i in range(0, len(dates), mun): 
@@ -779,26 +792,43 @@ async def run_issue_orders_task(config, base_path, log_cb, progress_cb, finish_c
                     log_cb(f"爬取数据 [{dates[i]} - {dates[end_idx]}]", "INFO")
                     
                     waybill_path, bad_unit_path = engine.run(dates[i], dates[end_idx])
+                    if waybill_path is None or bad_unit_path is None:
+                        continue
+                        
                     log_cb(f"数据清理中...", "INFO")
                     cleaner = DataCleaner(waybill_path, bad_unit_path)
                     df_dict = cleaner.run(type_list)
-                    writer = DBWriter(city_name, dates[i], dates[end_idx], base_dir=base_path)
-                    writer.run(df_dict) 
+                    
+                    # Store in memory instead of writing to disk immediately to save huge I/O time
+                    for t in type_list:
+                        if t in df_dict and not df_dict[t].empty:
+                            merged_results[t].append(df_dict[t])
             else:
+                log_cb(f"爬取数据 [{start_time} - {end_time}]", "INFO")
                 waybill_path, bad_unit_path = engine.run(start_time, end_time)
-                cleaner = DataCleaner(waybill_path, bad_unit_path)
-                df_dict = cleaner.run(type_list)
-                writer = DBWriter(city_name, start_time, end_time, base_dir=base_path)
-                writer.run(df_dict)
+                if waybill_path is not None and bad_unit_path is not None:
+                    log_cb(f"数据清理中...", "INFO")
+                    cleaner = DataCleaner(waybill_path, bad_unit_path)
+                    df_dict = cleaner.run(type_list)
+                    for t in type_list:
+                        if t in df_dict and not df_dict[t].empty:
+                            merged_results[t].append(df_dict[t])
 
             log_cb(f"合并数据...", "INFO")
-            merger = MergerFiles(city_name, start_time, base_dir=base_path)
-            type_dict = merger.run(type_list)
+            
+            type_dict = {}
+            for t in type_list:
+                if merged_results[t]:
+                    type_dict[t] = pd.concat(merged_results[t], ignore_index=True)
+                else:
+                    type_dict[t] = pd.DataFrame()
             
             log_cb(f"生成问题单及汇总文件...", "INFO")
-            merge_penalty = MergePenaltyRecords(city_name, start_time, base_dir=base_path)
+            merge_penalty = MergePenaltyRecords(city_name, start_time, base_dir=actual_base_dir)
             merge_penalty.save_dict_to_xlsx(type_dict)
             merge_penalty.save_sum_data(type_dict)
+            
+            log_cb(f"生成的汇总文件保存在: {merge_penalty.output_path_sum}", "SUCCESS")
             
             log_cb(f"{city_name} 处理完成", "SUCCESS")
             

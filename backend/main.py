@@ -228,6 +228,46 @@ def open_explorer(req: FileRequest):
     else:
         return {"success": False, "error": "目录不存在"}
 
+@app.post("/api/files/tree")
+def list_files_tree(req: FileRequest):
+    path = req.path
+    if not path or not os.path.exists(path):
+        return {"tree": {}}
+    
+    if os.path.isfile(path):
+        path = os.path.dirname(path)
+
+    def build_tree(current_path, depth=0):
+        if depth > 4:  # limit depth to prevent massive payloads
+            return []
+        items = []
+        try:
+            for f in os.listdir(current_path):
+                if f.startswith("~") or f.startswith("."):
+                    continue
+                f_path = os.path.join(current_path, f)
+                is_dir = os.path.isdir(f_path)
+                if is_dir:
+                    items.append({
+                        "name": f,
+                        "path": f_path,
+                        "is_dir": True,
+                        "children": build_tree(f_path, depth + 1)
+                    })
+                else:
+                    items.append({
+                        "name": f,
+                        "path": f_path,
+                        "is_dir": False,
+                        "size": os.path.getsize(f_path)
+                    })
+            items.sort(key=lambda x: (not x["is_dir"], x["name"].lower()))
+        except Exception:
+            pass
+        return items
+
+    return {"tree": build_tree(path)}
+
 @app.post("/api/files")
 def list_files(req: FileRequest, request: Request):
     # 处理逻辑：处理文件或目录的选择交互及路径解析

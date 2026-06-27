@@ -15,7 +15,12 @@ let intervalId: NodeJS.Timeout | null = null;
 
 const fetchStats = async () => {
   try {
-    const response = await fetch("/api/system/stats");
+    let wid = localStorage.getItem("app_workspace_id");
+    const headers = new Headers();
+    if (wid) {
+      headers.set("x-workspace-id", encodeURIComponent(wid));
+    }
+    const response = await fetch("/api/system/stats", { headers });
     if (!response.ok) {
       throw new Error("Failed to fetch system stats");
     }

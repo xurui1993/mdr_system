@@ -1236,9 +1236,10 @@ export default function App() {
     
     seenProgressTexts.current.clear();
     seenLogs.current.clear();
-    setRunningTask("core");
-    setProgress(0, "core");
-    setProgressText("大王说了，只要抓住唐僧，大家都有唐僧肉吃！", "core");
+    const targetAction = overrides?.action || "core";
+    setRunningTask(targetAction);
+    setProgress(0, targetAction);
+    setProgressText("大王说了，只要抓住唐僧，大家都有唐僧肉吃！", targetAction);
 
     const initText = `>>> 大王说了，只要抓住唐僧，大家都有唐僧肉吃！都给我打起精神来！`;
     seenLogs.current.add(initText);
@@ -1371,8 +1372,8 @@ export default function App() {
                   appendLog(data.msg, data.level);
                 }
               } else if (data.type === "progress") {
-                setProgress(Math.floor(data.value * 100), "core");
-                if (data.text) setProgressText(data.text, "core");
+                setProgress(Math.floor(data.value * 100), targetAction);
+                if (data.text) setProgressText(data.text, targetAction);
               } else if (data.type === "prompt") {
                 setActivePrompt({ uuid: data.uuid, title: data.title, message: data.message });
               } else if (data.type === "finish") {
@@ -1380,14 +1381,14 @@ export default function App() {
                 if (data.status === "error") {
                   setProgressText(
                     `执行失败: ${data.result_msg}`,
-                    "core"
+                    targetAction
                   );
                   appendLog(`[ERROR] 执行失败: ${data.result_msg}`, "ERROR");
                 } else {
-                  setProgress(100, "core");
+                  setProgress(100, targetAction);
                   setProgressText(
                     data.result_msg || "系统休眠中...",
-                    "core"
+                    targetAction
                   );
                 }
 

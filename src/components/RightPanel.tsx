@@ -1,6 +1,98 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Theme, AppConfig } from '../types';
-import { File, Folder, HardDriveDownload, FileText, FileSpreadsheet, Download, ChevronRight, Clock, RefreshCw, Trash2, FolderPlus, Search, FolderTree, UploadCloud } from 'lucide-react';
+import { File, Folder, HardDriveDownload, FileText, FileSpreadsheet, Download, ChevronRight, Clock, RefreshCw, Trash2, FolderPlus, Search, FolderTree, UploadCloud, ChevronDown } from 'lucide-react';
+
+// Added TreeHoverMenu for Quick Access
+function TreeHoverMenu({ title, basePath, fetchFiles, fetchWithAuth }: any) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [treeData, setTreeData] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  const handleMouseEnter = async () => {
+    setIsOpen(true);
+    if (treeData.length === 0 && !loading) {
+      setLoading(true);
+      try {
+        const resp = await fetchWithAuth(`/api/files/tree`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ path: basePath }),
+        });
+        const data = await resp.json();
+        setTreeData(data.tree || []);
+      } catch (err) {
+        console.error(err);
+      }
+      setLoading(false);
+    }
+  };
+
+  const renderTree = (items: any[]) => {
+    return (
+      <ul className="pl-4 border-l border-cyan-500/10 ml-2 mt-1 space-y-1">
+        {items.map((item, idx) => (
+          <li key={idx} className="relative">
+            {item.is_dir ? (
+              <div className="group/tree">
+                <button
+                  onClick={() => { fetchFiles(item.path); setIsOpen(false); }}
+                  className="flex items-center gap-1 text-[12px] text-slate-500 hover:text-cyan-400 py-1"
+                >
+                  <Folder className="w-3 h-3" />
+                  {item.name}
+                </button>
+                {item.children && item.children.length > 0 && renderTree(item.children)}
+              </div>
+            ) : (
+              <button
+                onClick={() => { fetchFiles(item.path); setIsOpen(false); }}
+                className="flex items-center gap-1 text-[12px] text-slate-400 hover:text-cyan-300 py-1"
+              >
+                <File className="w-3 h-3" />
+                {item.name}
+              </button>
+            )}
+          </li>
+        ))}
+      </ul>
+    );
+  };
+
+  return (
+    <div 
+      className="relative z-50 group" 
+      onMouseEnter={handleMouseEnter} 
+      onMouseLeave={() => setIsOpen(false)}
+    >
+      <button 
+        onClick={() => fetchFiles(basePath)} 
+        className="px-3 py-1 flex items-center gap-1 text-[12px] bg-cyan-500/10 text-cyan-400 light:bg-slate-200 light:text-slate-700 rounded hover:bg-cyan-500/20 light:hover:bg-slate-300 shrink-0"
+      >
+        {title}
+        <ChevronDown className="w-3 h-3" />
+      </button>
+      
+      {isOpen && (
+        <div className="absolute top-full left-0 mt-1 w-64 max-h-[300px] overflow-y-auto bg-[#0a0f1c] light:bg-white border border-sky-500/20 light:border-slate-200 rounded-lg shadow-xl p-3 scrollbar-thin scrollbar-thumb-sky-500/20">
+          <div className="text-[11px] font-mono text-slate-500 mb-2 border-b border-slate-800 pb-1">
+            快速跳转至子目录:
+          </div>
+          {loading ? (
+            <div className="text-[12px] text-slate-400 animate-pulse">加载目录树中...</div>
+          ) : (
+            treeData.length > 0 ? (
+              <div className="text-[12px]">
+                {renderTree(treeData)}
+              </div>
+            ) : (
+              <div className="text-[12px] text-slate-500">无子目录</div>
+            )
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export function RightPanel({ theme, activeTab, config, isRunning }: { theme: Theme, activeTab: 'task' | 'output', config?: AppConfig, isRunning?: boolean }) {
  const [files, setFiles] = useState<any[]>([]);
@@ -270,19 +362,35 @@ export function RightPanel({ theme, activeTab, config, isRunning }: { theme: The
  </div>
 
  {activeTab === 'output' && (
- <div className="flex px-6 border-b light:border-slate-200 border-sky-500/10 light:bg-slate-100 bg-[#060b18]">
- <button
- onClick={() => { setInternalTab('outputs'); setCurrentPath(''); }}
- className={`px-4 py-2 text-[13px] font-medium border-b-2 transition-all ${internalTab === 'outputs' ? 'border-cyan-400 light:border-slate-800 light:text-slate-900 text-cyan-400 font-bold bg-sky-500/10 light:bg-white' : 'border-transparent light:text-slate-600 text-slate-500 hover:light:text-slate-800 hover:text-slate-300'}`}
- >
- 输出文件 (Outputs)
- </button>
- <button
- onClick={() => { setInternalTab('uploads'); setCurrentPath(''); }}
- className={`px-4 py-2 text-[13px] font-medium border-b-2 transition-all ${internalTab === 'uploads' ? 'border-cyan-400 light:border-slate-800 light:text-slate-900 text-cyan-400 font-bold bg-sky-500/10 light:bg-white' : 'border-transparent light:text-slate-600 text-slate-500 hover:light:text-slate-800 hover:text-slate-300'}`}
- >
- 云端上传资源 (Uploads)
- </button>
+ <div className="flex flex-col">
+  <div className="flex px-6 border-b light:border-slate-200 border-sky-500/10 light:bg-slate-100 bg-[#060b18]">
+  <button
+  onClick={() => { setInternalTab('outputs'); setCurrentPath(''); }}
+  className={`px-4 py-2 text-[13px] font-medium border-b-2 transition-all ${internalTab === 'outputs' ? 'border-cyan-400 light:border-slate-800 light:text-slate-900 text-cyan-400 font-bold bg-sky-500/10 light:bg-white' : 'border-transparent light:text-slate-600 text-slate-500 hover:light:text-slate-800 hover:text-slate-300'}`}
+  >
+  输出文件 (Outputs)
+  </button>
+  <button
+  onClick={() => { setInternalTab('uploads'); setCurrentPath(''); }}
+  className={`px-4 py-2 text-[13px] font-medium border-b-2 transition-all ${internalTab === 'uploads' ? 'border-cyan-400 light:border-slate-800 light:text-slate-900 text-cyan-400 font-bold bg-sky-500/10 light:bg-white' : 'border-transparent light:text-slate-600 text-slate-500 hover:light:text-slate-800 hover:text-slate-300'}`}
+  >
+  云端上传资源 (Uploads)
+  </button>
+  </div>
+  <div className="flex px-6 py-2 gap-2 bg-[#060b18] light:bg-slate-50 border-b border-sky-500/10 light:border-slate-200 overflow-x-auto scrollbar-hide">
+  <span className="text-[12px] text-slate-500 my-auto mr-1 font-mono shrink-0">快速访问:</span>
+  {internalTab === 'outputs' ? (
+  <>
+  <TreeHoverMenu title="问题单生成" basePath="../outputs/问题单生成" fetchFiles={fetchFiles} fetchWithAuth={fetchWithAuth} />
+  <TreeHoverMenu title="兼职薪资" basePath="../outputs/兼职薪资" fetchFiles={fetchFiles} fetchWithAuth={fetchWithAuth} />
+  <TreeHoverMenu title="骑手支付绑定" basePath="../outputs/骑手支付绑定" fetchFiles={fetchFiles} fetchWithAuth={fetchWithAuth} />
+  </>
+  ) : (
+  <>
+  <TreeHoverMenu title="我的工作区" basePath={`../uploads/${getWorkspaceId()}`} fetchFiles={fetchFiles} fetchWithAuth={fetchWithAuth} />
+  </>
+  )}
+  </div>
  </div>
  )}
 

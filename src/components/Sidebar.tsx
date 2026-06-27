@@ -33,9 +33,9 @@ export function Sidebar({
     { id: "salary_bind", icon: <WalletCards size={18} strokeWidth={2} />, label: "骑手支付绑定" },
     { id: "core", icon: <Calculator size={18} strokeWidth={2} />, label: "兼职薪资核算" },
     { id: "issue_orders", icon: <FileWarning size={18} strokeWidth={2} />, label: "问题单生成" },
+    { id: "deduction_config", icon: <Settings size={18} strokeWidth={2} />, label: "扣款项配置" },
     { id: "chat", icon: <MessageSquareHeart size={18} strokeWidth={2} />, label: "智能控制助手" },
     { id: "monitor", icon: <Activity size={18} strokeWidth={2} />, label: "任务监控" },
-    { id: "deduction_config", icon: <Settings size={18} strokeWidth={2} />, label: "扣款项配置" },
     { id: "export_list", icon: <Download size={18} strokeWidth={2} />, label: "任务下载" },
   ];
 
