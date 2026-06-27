@@ -8,12 +8,13 @@ interface IssueOrderActionPanelProps {
  isRunning: boolean;
  onRun: () => void;
  progress: number;
+ taskStats?: any;
 }
 
-export function IssueOrderActionPanel({ theme, isRunning, onRun, progress }: IssueOrderActionPanelProps) {
+export function IssueOrderActionPanel({ theme, isRunning, onRun, progress, taskStats }: IssueOrderActionPanelProps) {
  return (
  <div className="flex flex-col w-full h-full justify-center items-center z-10 p-4 space-y-4">
- <div className="flex-1 flex flex-col justify-center w-full px-2">
+ <div className="flex-1 flex flex-col justify-center w-full px-2 gap-4">
  <div className="bg-sky-500/5 light:bg-sky-50/80 rounded-2xl p-4 w-full flex flex-col gap-3">
  <div className="flex items-center gap-2 mb-1">
  <div className="p-1.5 rounded-lg bg-sky-500/10 light:bg-white light:shadow-sm">
@@ -36,6 +37,17 @@ export function IssueOrderActionPanel({ theme, isRunning, onRun, progress }: Iss
  </div>
  </div>
  </div>
+
+        <div className="flex flex-col gap-1 p-3 rounded-xl border bg-slate-800/40 border-slate-700/50 light:bg-slate-50 light:border-slate-200">
+          <div className="flex items-center gap-2 text-slate-500 dark:text-slate-400 mb-1">
+            <Activity className="w-4 h-4 text-sky-500" />
+            <span className="text-xs font-medium">程序耗时时长</span>
+          </div>
+          <div className="flex items-baseline gap-1">
+            <span className="text-2xl font-bold text-slate-800 dark:text-slate-100">{taskStats?.elapsed_time || 0}</span>
+            <span className="text-[10px] text-slate-400">秒</span>
+          </div>
+        </div>
  </div>
 
  <div className="w-full shrink-0 relative">

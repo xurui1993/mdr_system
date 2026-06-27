@@ -269,9 +269,9 @@ export default function App() {
     localStorage.setItem("taskHistory", JSON.stringify(taskHistory));
   }, [taskHistory]);
 
-  const [taskStats, setTaskStats] = useState<any>(() => {
-    const saved = localStorage.getItem("taskStats");
-    return saved ? JSON.parse(saved) : null;
+  const [taskStatsMap, setTaskStatsMap] = useState<Record<string, any>>(() => {
+    const saved = localStorage.getItem("taskStatsMap");
+    return saved ? JSON.parse(saved) : {};
   });
 
   const [salaryBindStats, setSalaryBindStats] = useState<SalaryBindStatsData | null>(() => {
@@ -280,10 +280,8 @@ export default function App() {
   });
 
   useEffect(() => {
-    if (taskStats) {
-      localStorage.setItem("taskStats", JSON.stringify(taskStats));
-    }
-  }, [taskStats]);
+    localStorage.setItem("taskStatsMap", JSON.stringify(taskStatsMap));
+  }, [taskStatsMap]);
 
   useEffect(() => {
     if (salaryBindStats) {
@@ -1416,9 +1414,9 @@ export default function App() {
                 setTaskHistory((prev) => [newRecord, ...prev]);
 
                 if (data.status === "success") {
-                  setProgress(100, "core");
+                  setProgress(100, targetAction);
                   if (data.stats) {
-                    setTaskStats(data.stats);
+                    setTaskStatsMap(prev => ({ ...prev, [targetAction]: data.stats }));
                   }
                   appendLog(`>>> 🎉 任务完成！`, "SUCCESS", targetAction);
                   confetti({
@@ -1524,7 +1522,7 @@ export default function App() {
           
           {activeMenu === "dashboard" && (
             <div className="flex-1 min-h-0 animate-in fade-in slide-in-from-bottom-4 duration-500 overflow-y-auto">
-              <DashboardPanel theme={theme} onSelectMenu={setActiveMenu} taskStats={taskStats} taskHistory={taskHistory} />
+              <DashboardPanel theme={theme} onSelectMenu={setActiveMenu} taskStats={taskStatsMap["core"]} taskHistory={taskHistory} />
             </div>
           )}
 
@@ -1558,7 +1556,7 @@ export default function App() {
                   isRunning={runningTask === "core"}
                   onRun={handleRun}
                   progress={progress}
-                  taskStats={taskStats}
+                  taskStats={taskStatsMap[activeMenu]}
                 />
               </div>
             </section>
@@ -1584,6 +1582,7 @@ export default function App() {
                   isRunning={runningTask === "issue_orders"}
                   onRun={() => handleRun({ action: "issue_orders" })}
                   progress={progress}
+                  taskStats={taskStatsMap[activeMenu]}
                 />
               </div>
             </section>
@@ -1697,7 +1696,7 @@ export default function App() {
                           let badgeBg = 'bg-slate-100 dark:bg-slate-800/60';
                           let textColor = 'text-slate-600 dark:text-slate-400';
 
-                          if (runningTask !== null) {
+                          if (runningTask === activeMenu) {
                             statusText = '处理中';
                             dotColor = 'bg-sky-500';
                             pingColor = 'bg-sky-400';
@@ -1721,7 +1720,7 @@ export default function App() {
                                   {statusText}
                                 </span>
                               </div>
-                              <TaskTimer isRunning={runningTask !== null} />
+                              <TaskTimer isRunning={runningTask === activeMenu} />
                             </div>
                           );
                         })()}
@@ -1762,7 +1761,7 @@ export default function App() {
                     logs={logs}
                     progress={progress}
                     progressText={progressText}
-                    isRunning={runningTask !== null}
+                    isRunning={runningTask === activeMenu}
                   />
                 </div>
               </div>

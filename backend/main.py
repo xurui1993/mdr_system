@@ -231,8 +231,11 @@ def open_explorer(req: FileRequest):
 @app.post("/api/files/tree")
 def list_files_tree(req: FileRequest):
     path = req.path
+    if path:
+        applet_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        path = os.path.abspath(os.path.join(applet_dir, path))
     if not path or not os.path.exists(path):
-        return {"tree": {}}
+        return {"tree": []}
     
     if os.path.isfile(path):
         path = os.path.dirname(path)

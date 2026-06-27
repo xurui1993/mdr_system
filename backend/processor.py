@@ -1100,7 +1100,16 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                     if overlap:
                         df_rules_sub = df_rules_sub.drop(columns=overlap)
                         
-                    df_sht2 = pd.merge(df_sht2, df_rules_sub, left_on='_tid', right_on='_cfg_team', how='left')
+                    def _match_cfg_team(tid):
+                        tid_str = str(tid).strip()
+                        for c_team in df_rules_sub['_cfg_team']:
+                            if c_team == tid_str:
+                                return c_team
+                        return tid_str
+                    
+                    df_sht2['_mapped_tid'] = df_sht2['_tid'].apply(_match_cfg_team)
+                    df_sht2 = pd.merge(df_sht2, df_rules_sub, left_on='_mapped_tid', right_on='_cfg_team', how='left')
+                    df_sht2 = df_sht2.drop(columns=['_mapped_tid'])
                 
                 for d_col in custom_deductions:
                     if d_col not in df_sht2.columns:
@@ -1275,10 +1284,6 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                             if c_idx in [2, 3, 4]:
                                 val_idx = c_idx - 2
                                 target_cell.value = ws_sht2.cell(row=i + 2, column=val_idx + 1).value
-                            elif c_idx == 1:
-                                team_name = str(ws_sht2.cell(row=i + 2, column=1).value or "").strip()
-                                t_id = team_mapping.get(team_name, "")
-                                target_cell.value = int(t_id) if t_id and str(t_id).isdigit() else t_id
                             else:
                                 formula_val = t_item['val']
                                 if isinstance(formula_val, str) and formula_val.startswith('='):
@@ -1426,10 +1431,21 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
 
                 team_name_idx = next((i for i, c in enumerate(rules_headers) if "团队名称" in str(c)), 2)
 
+                # Dynamically find columns in df_source (问题单)
+                source_headers = [str(c).strip() for c in df_source.columns]
+                
+                # Find Team Name column
+                wtd_team_idx = next((i for i, c in enumerate(source_headers) if "团队名称" in c or "团队" in c or "站点" in c), 5)
+                # Find Reason/Remark column (usually 判责原因, 备注)
+                wtd_reason_idx = next((i for i, c in enumerate(source_headers) if "判责原因" in c or "原因" in c or "备注" in c), 6)
+                
+                if wtd_team_idx >= len(source_headers): wtd_team_idx = 5
+                if wtd_reason_idx >= len(source_headers): wtd_reason_idx = 6
+
                 is_fraud_info = df_source.iloc[:, 2].astype(str).isin(dictp_fraud).map({True: "是", False: "否"}).tolist()
                 col0_list = df_source.iloc[:, 0].tolist()
-                col5_list = df_source.iloc[:, 5].astype(str).tolist()
-                col6_list = df_source.iloc[:, 6].astype(str).tolist() if len(df_source.columns) > 6 else [""] * len(col0_list)
+                col5_list = df_source.iloc[:, wtd_team_idx].astype(str).tolist() if len(df_source.columns) > wtd_team_idx else [""] * len(col0_list)
+                col6_list = df_source.iloc[:, wtd_reason_idx].astype(str).tolist() if len(df_source.columns) > wtd_reason_idx else [""] * len(col0_list)
                 
                 fast_vals = []
                 matched_headers_list = []
@@ -1465,7 +1481,12 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                             if cache_key in memo_wtd:
                                 val = memo_wtd[cache_key]
                             else:
-                                specific_amount = keyword_amount_map.get((r5_clean, matched_kw))
+                                specific_amount = None
+                                for (s_name, k_kw), amt in keyword_amount_map.items():
+                                    if k_kw == matched_kw and s_name == r5_clean:
+                                        specific_amount = amt
+                                        break
+                                        
                                 if specific_amount is not None:
                                     val = specific_amount
                                 else:
@@ -1473,7 +1494,7 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                                     wtd_idx = rules_headers.index(matched_header)
                                     for rule_row in rules_data:
                                         rt_name = str(rule_row[team_name_idx]).strip() if pd.notna(rule_row[team_name_idx]) else ""
-                                        if rt_name and rt_name in r5_clean:
+                                        if rt_name and rt_name == r5_clean:
                                             val = rule_row[wtd_idx]
                                             break
                                 memo_wtd[cache_key] = val
@@ -1948,7 +1969,16 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                     if overlap:
                         df_rules_sub = df_rules_sub.drop(columns=overlap)
 
-                    df_sht2 = pd.merge(df_sht2, df_rules_sub, left_on='_tid', right_on='_cfg_team', how='left')
+                    def _match_cfg_team(tid):
+                        tid_str = str(tid).strip()
+                        for c_team in df_rules_sub['_cfg_team']:
+                            if c_team == tid_str:
+                                return c_team
+                        return tid_str
+
+                    df_sht2['_mapped_tid'] = df_sht2['_tid'].apply(_match_cfg_team)
+                    df_sht2 = pd.merge(df_sht2, df_rules_sub, left_on='_mapped_tid', right_on='_cfg_team', how='left')
+                    df_sht2 = df_sht2.drop(columns=['_mapped_tid'])
                 
                 for d_col in custom_deductions:
                     if d_col not in df_sht2.columns:
@@ -2132,10 +2162,6 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                         if c_idx in [2, 3, 4]:
                             val_idx = c_idx - 2
                             target_cell.value = ws_sht2.cell(row=i + 2, column=val_idx + 1).value
-                        elif c_idx == 1:
-                            team_name = str(ws_sht2.cell(row=i + 2, column=1).value or "").strip()
-                            t_id = team_mapping.get(team_name, "")
-                            target_cell.value = int(t_id) if t_id and str(t_id).isdigit() else t_id
                         else:
                             formula_val = t_item['val']
                             if isinstance(formula_val, str) and formula_val.startswith('='):

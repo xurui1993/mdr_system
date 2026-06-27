@@ -80,7 +80,7 @@ export function TerminalPanel({ logs, progress = 0, progressText = '', appTheme 
  </div>
 
  {/* Futuristic Progress Bar */}
- {isRunning && progress > 0 && (
+ {isRunning && progress >= 0 && (
  <div className={`w-full shrink-0 relative z-30 ${appTheme === 'light' ? 'bg-white border-slate-200' : 'bg-[#010308]/90 border-sky-500/20'} border-t px-6 py-3 `}>
  <div className="flex justify-between items-center mb-1.5 font-mono text-[11px] sm:text-[12px]">
  <div className={`${appTheme === 'light' ? 'text-sky-600' : 'text-sky-400 drop-shadow-[0_0_5px_rgba(56,189,248,0.6)]'} flex items-center gap-2`}>

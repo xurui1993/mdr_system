@@ -707,9 +707,15 @@ async def run_main_calculation_gen(city, selected_option, source_folder, base_pa
         
     def worker():
         # 处理逻辑：worker 的主要执行逻辑
+        import time
+        start_time = time.time()
         try:
             process_rider_data(city, selected_option, source_folder, base_path, log_cb, progress_cb, finish_cb, theme, enable_interceptor=enable_interceptor, enable_cross_station_merge=enable_cross_station_merge, prompt_callback=prompt_cb, deductionRules=deductionRules)
+            elapsed = time.time() - start_time
+            log_cb(f">>> ⏳ 程序执行完毕，共计耗时: {elapsed:.2f} 秒", "SUCCESS")
         except Exception as e:
+            elapsed = time.time() - start_time
+            log_cb(f">>> ⏳ 程序异常终止，共计耗时: {elapsed:.2f} 秒", "ERROR")
             finish_cb("error", str(e))
 
     yield create_log_event(">>> ⚙️ 你这孩子，一天到晚瞎想啥呢？能在大王手底下干活，那是咱们老猪家祖祖辈辈修来的福气！新一轮工作开始了...", "INFO")
@@ -750,9 +756,15 @@ async def run_issue_orders_gen(config_data, base_path):
     
     def worker():
         # 处理逻辑：worker 的主要执行逻辑
+        import time
+        start_time = time.time()
         try:
             asyncio.run(run_issue_orders_task(config_data, base_path, log_cb, progress_cb, finish_cb))
+            elapsed = time.time() - start_time
+            log_cb(f">>> ⏳ 程序执行完毕，共计耗时: {elapsed:.2f} 秒", "SUCCESS")
         except Exception as e:
+            elapsed = time.time() - start_time
+            log_cb(f">>> ⏳ 程序异常终止，共计耗时: {elapsed:.2f} 秒", "ERROR")
             finish_cb("error", str(e))
 
     thread = threading.Thread(target=worker, daemon=True)

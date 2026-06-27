@@ -744,6 +744,8 @@ def generate_dates_between(start_date, end_date):
 
 async def run_issue_orders_task(config, base_path, log_cb, progress_cb, finish_cb):
     # 处理逻辑：作为核心异步任务入口，负责启动具体的业务流程计算
+    import time
+    start_time_total = time.time()
     try:
         from tasks import create_log_event, create_progress_event, create_finish_event
     except ImportError:
@@ -833,8 +835,11 @@ async def run_issue_orders_task(config, base_path, log_cb, progress_cb, finish_c
             log_cb(f"{city_name} 处理完成", "SUCCESS")
             
         progress_cb(1.0, "全部处理完成")
+        elapsed_time = time.time() - start_time_total
         log_cb("--- 所有任务执行完毕 ---", "SUCCESS")
-        finish_cb("success", "问题单生成完毕", None)
+        log_cb(f"问题单生成耗时时长: {elapsed_time:.2f} 秒")
+        stats_info = {"elapsed_time": round(elapsed_time, 2)}
+        finish_cb("success", "问题单生成完毕", stats_info)
         
     except Exception as e:
         log_cb(f"执行时发生错误: {str(e)}", "ERROR")

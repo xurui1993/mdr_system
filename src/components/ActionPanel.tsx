@@ -73,6 +73,17 @@ export function ActionPanel({ appTheme = 'dark', isRunning, progress, taskStats 
           </div>
         </div>
 
+        <div className={`flex flex-col gap-1 p-3 rounded-xl border ${appTheme === 'light' ? 'bg-slate-50 border-slate-200' : 'bg-slate-800/40 border-slate-700/50'}`}>
+          <div className="flex items-center gap-2 text-slate-500 dark:text-slate-400 mb-1">
+            <Activity className="w-4 h-4 text-sky-500" />
+            <span className="text-xs font-medium">程序耗时时长</span>
+          </div>
+          <div className="flex items-baseline gap-1">
+            <span className="text-2xl font-bold text-slate-800 dark:text-slate-100">{taskStats?.elapsed_time || 0}</span>
+            <span className="text-[10px] text-slate-400">秒</span>
+          </div>
+        </div>
+
         {/* Collapsible Guide */}
         <div className="mt-auto pt-4 border-t border-slate-200 dark:border-slate-800/50">
           <button 
