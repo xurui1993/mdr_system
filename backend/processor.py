@@ -1133,7 +1133,7 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                 df_sht2['往期累计核算记录'] = df_sht2.apply(get_past_notes, axis=1)
                 df_sht2['往期月费是否已扣'] = df_sht2.apply(get_past_fee_deducted, axis=1)
 
-                custom_deductions = [str(c) for c in df_rules.columns if c not in ["城市", "团队名称", "团队ID"] and not str(c).endswith("_maxDays") and not str(c).endswith("_isKw")]
+                custom_deductions = [str(c) for c in df_rules.columns if c in ["安全基金", "使用费", "非蜂卡", "月费"] and pd.to_numeric(df_rules[c], errors='coerce').fillna(0).abs().sum() > 0]
                 
                 cfg_team = next((c for c in df_rules.columns if "团队名称" in str(c) and "maxDays" not in str(c)), None)
                 if cfg_team:
@@ -1478,6 +1478,16 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                                         for k in str(kws_str).split(','):
                                             k = k.strip()
                                             if k: global_kw_to_header[k] = h_name
+                else:
+                    for _, row in df_rules.iterrows():
+                        site_name = str(row.get('团队名称', '')).strip()
+                        for c in df_rules.columns:
+                            c_str = str(c)
+                            if c_str.endswith('_isKw') and row.get(c_str):
+                                h_name = c_str.replace('_isKw', '')
+                                amt = row.get(h_name, 0)
+                                global_kw_to_header[h_name] = h_name
+                                keyword_amount_map[(site_name, h_name)] = float(amt)
 
                 team_name_idx = next((i for i, c in enumerate(rules_headers) if "团队名称" in str(c)), 2)
 
@@ -1509,23 +1519,36 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                     if fraud == "是":
                         val = 0
                     else:
-                        matched_kw = None
-                        if r6_clean:
-                            for kw, h_name in global_kw_to_header.items():
-                                if kw in r6_clean:
-                                    matched_header = h_name
-                                    matched_kw = kw
+                        base_header = None
+                        if r0_clean in rules_headers:
+                            base_header = r0_clean
+                        else:
+                            for h_name in rules_headers:
+                                if h_name in r0_clean or r0_clean in h_name:
+                                    base_header = h_name
                                     break
-                            
-                        if not matched_header:
-                            if r0_clean in rules_headers:
-                                matched_header = r0_clean
-                            else:
-                                for h_name in rules_headers:
-                                    if h_name in r0_clean or r0_clean in h_name:
-                                        matched_header = h_name
-                                        break
                                     
+                        matched_kw = None
+                        if base_header:
+                            is_kw_based = any(h == base_header for _, h in global_kw_to_header.items())
+                            if is_kw_based and r6_clean:
+                                for kw, h_name in global_kw_to_header.items():
+                                    if h_name == base_header and kw in r6_clean:
+                                        matched_header = h_name
+                                        matched_kw = kw
+                                        break
+                                if not matched_header:
+                                    matched_header = base_header
+                            else:
+                                matched_header = base_header
+                        else:
+                            if r6_clean:
+                                for kw, h_name in global_kw_to_header.items():
+                                    if kw in r6_clean:
+                                        matched_header = h_name
+                                        matched_kw = kw
+                                        break
+
                         if matched_header:
                             cache_key = (matched_header, r5_clean, matched_kw)
                             if cache_key in memo_wtd:
@@ -1937,7 +1960,13 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
             for row_data in sorted_keys:
                 b_date, team, rid, rname = row_data
                 summ = daily_summary[row_data]
-                is_valid = 1 if summ.get("fraud_comp", 0) == 0 and summ.get("fraud_late", 0) == 0 else 0
+                has_fraud = (summ.get("fraud_comp", 0) > 0 or summ.get("fraud_late", 0) > 0)
+                if has_fraud:
+                    real_comp = summ.get("completed", 0) - summ.get("fraud_comp", 0)
+                    real_late = summ.get("late", 0) - summ.get("fraud_late", 0)
+                    is_valid = 0 if (real_comp <= 0 and real_late <= 0) else 1
+                else:
+                    is_valid = 1
                 rid_clean = str(rid).replace('.0', '').strip()
                 if not rid_clean or rid_clean.lower() == 'nan': continue
                 att_records.append({
@@ -2007,7 +2036,7 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                 df_sht2['往期累计核算记录'] = df_sht2.apply(get_past_notes, axis=1)
                 df_sht2['往期月费是否已扣'] = df_sht2.apply(get_past_fee_deducted, axis=1)
 
-                custom_deductions = [str(c) for c in df_rules.columns if c not in ["城市", "团队名称", "团队ID"] and not str(c).endswith("_maxDays") and not str(c).endswith("_isKw")]
+                custom_deductions = [str(c) for c in df_rules.columns if c in ["安全基金", "使用费", "非蜂卡", "月费"] and pd.to_numeric(df_rules[c], errors='coerce').fillna(0).abs().sum() > 0]
                 
                 cfg_team = next((c for c in df_rules.columns if "团队名称" in str(c) and "maxDays" not in str(c)), None)
                 if cfg_team:
