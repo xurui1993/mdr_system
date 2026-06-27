@@ -554,8 +554,6 @@ export default function App() {
         ...prev,
         { text: `>>> 📦 压缩中，请稍候...`, level: "INFO" },
       ]);
-      setProgress(20, "core");
-      setProgressText(">>> 📦 压缩中，请稍候...", "core");
       const blob = await zip.generateAsync({ 
         type: "blob", 
         compression: "STORE" 
@@ -568,8 +566,6 @@ export default function App() {
           level: "INFO",
         },
       ]);
-      setProgress(50, "core");
-      setProgressText(`>>> ☁️ 正在上传至云端数据槽... (${(blob.size / 1024 / 1024).toFixed(2)} MB)`, "core");
       const formData = new FormData();
       formData.append("file", blob, "source.zip");
 
@@ -585,9 +581,6 @@ export default function App() {
       const d = await r.json();
 
       if (d.success && d.path) {
-        setProgress(100, "core");
-        setProgressText(`>>> ✅ 上传完成！即将开始处理...`, "core");
-        await new Promise(resolve => setTimeout(resolve, 800));
         return d.path;
       } else {
         throw new Error(d.error || "上传失败");
@@ -674,9 +667,6 @@ export default function App() {
   };
 
   const uploadFilesAndExecute = async (initialFileList: { file: File; relativePath: string }[]) => {
-    setRunningTask("core");
-    setProgress(0, "core");
-    setProgressText(">>> 正在打包并上传至云端数据槽...", "core");
     seenLogs.current.clear();
 
     const path = await uploadExtractedFilesAndGetPath(initialFileList);
@@ -691,13 +681,8 @@ export default function App() {
       ]);
       showToast("数据源已挂载，自动开始执行", "success");
       
-      setRunningTask(null); // Allow handleRun to proceed
-      
       // Execute immediately using the new path
       handleRun({ sourcePath: path });
-    } else {
-      setRunningTask(null);
-      setProgressText("上传已中止或失败", "core");
     }
   };
 

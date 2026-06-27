@@ -208,42 +208,65 @@ export function DeductionConfigPanel({ theme }: DeductionConfigProps) {
     const citiesMap = new Map<string, City>();
 
     rows.forEach(row => {
-      const cityName = row['城市'];
-      const siteName = row['团队名称'];
+      // Normalize row keys by trimming and removing special character markers
+      const normalizedRow: any = {};
+      Object.keys(row).forEach(k => {
+        normalizedRow[k.trim()] = row[k];
+      });
+
+      // Find '城市' key robustly
+      let cityName = normalizedRow['城市'];
+      if (!cityName) {
+        const foundKey = Object.keys(normalizedRow).find(k => k.includes('城市'));
+        if (foundKey) cityName = normalizedRow[foundKey];
+      }
+
+      // Find '团队名称' or '团队' key robustly
+      let siteName = normalizedRow['团队名称'];
+      if (!siteName) {
+        const foundKey = Object.keys(normalizedRow).find(k => k.includes('团队名称') || k.includes('团队ID') || k === '团队' || k === '站点');
+        if (foundKey) siteName = normalizedRow[foundKey];
+      }
+
       if (!cityName || !siteName) return;
 
-      if (!citiesMap.has(cityName)) {
-        citiesMap.set(cityName, {
+      const cleanCityName = String(cityName).trim();
+      const cleanSiteName = String(siteName).trim();
+      if (!cleanCityName || !cleanSiteName) return;
+
+      if (!citiesMap.has(cleanCityName)) {
+        citiesMap.set(cleanCityName, {
           id: Math.random().toString(36).substring(7),
-          name: cityName,
+          name: cleanCityName,
           sites: []
         });
       }
 
-      const city = citiesMap.get(cityName)!;
+      const city = citiesMap.get(cleanCityName)!;
       const deductionItems: DeductionItem[] = [];
       
-      Object.keys(row).forEach(key => {
-        if (key === '城市' || key === '团队名称' || key === '团队ID') return;
+      Object.keys(normalizedRow).forEach(key => {
+        const trimmedKey = key.trim();
+        if (trimmedKey === '城市' || trimmedKey === '团队名称' || trimmedKey === '团队ID' || trimmedKey === '团队' || trimmedKey === '站点' || trimmedKey.includes('城市')) return;
         
         const kwCols = ["投诉", "差评", "违规虚假", "物流责", "不准时单", "超时", "T10", "提前点送达"];
-        const isKw = kwCols.some(kw => key.includes(kw));
+        const isKw = kwCols.some(kw => trimmedKey.includes(kw));
         
         deductionItems.push({
           id: Math.random().toString(36).substring(7),
-          name: key,
-          amount: Number(row[key]) || 0,
+          name: trimmedKey,
+          amount: Number(normalizedRow[key]) || 0,
           isKeywordBased: isKw,
-          keywords: isKw ? key : '',
-          keywordAmounts: isKw ? [{ id: Math.random().toString(36).substring(7), keyword: key, amount: Number(row[key]) || 0 }] : undefined,
+          keywords: isKw ? trimmedKey : '',
+          keywordAmounts: isKw ? [{ id: Math.random().toString(36).substring(7), keyword: trimmedKey, amount: Number(normalizedRow[key]) || 0 }] : undefined,
           maxDays: undefined
         });
       });
 
       city.sites.push({
         id: Math.random().toString(36).substring(7),
-        name: siteName,
-        siteId: '', 
+        name: cleanSiteName,
+        siteId: normalizedRow['团队ID'] ? String(normalizedRow['团队ID']).trim() : '', 
         deductionItems
       });
     });
@@ -251,10 +274,58 @@ export function DeductionConfigPanel({ theme }: DeductionConfigProps) {
     return Array.from(citiesMap.values());
   };
 
-  const saveRules = () => {
+  const saveRules = async () => {
     setIsSaving(true);
     localStorage.setItem(`deduction_config_v5_${wid}`, JSON.stringify(data));
     
+    try {
+      const exportRows: any[] = [];
+      data.forEach(city => {
+        city.sites.forEach(site => {
+          const row: any = {
+            '城市': city.name,
+            '团队名称': site.name,
+            '团队ID': site.siteId || ''
+          };
+          site.deductionItems.forEach(item => {
+            row[item.name] = item.amount;
+          });
+          exportRows.push(row);
+        });
+      });
+
+      const ws = XLSX.utils.json_to_sheet(exportRows);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "config");
+      
+      const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+      const blob = new Blob([wbout], { type: 'application/octet-stream' });
+      
+      const formData = new FormData();
+      formData.append("file", blob, "config.xlsx");
+      formData.append("targetPath", "config.xlsx");
+
+      const response = await fetch("/api/upload_file", {
+        method: "POST",
+        headers: {
+          "x-workspace-id": encodeURIComponent(wid)
+        },
+        body: formData
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      
+      const resData = await response.json();
+      if (!resData.success) {
+        throw new Error(resData.error || "Save failed on server");
+      }
+      console.log("Successfully synchronized local config.xlsx on the server!");
+    } catch (err) {
+      console.error("Failed to synchronize config.xlsx with server:", err);
+    }
+
     if (pendingLogs.length > 0) {
       setChangeLogs(prev => {
         const newLogs = [...pendingLogs, ...prev].slice(0, 100);
@@ -263,11 +334,9 @@ export function DeductionConfigPanel({ theme }: DeductionConfigProps) {
       setPendingLogs([]);
     }
 
-    setTimeout(() => {
-      setIsSaving(false);
-      setSaveSuccess(true);
-      setTimeout(() => setSaveSuccess(false), 2000);
-    }, 500);
+    setIsSaving(false);
+    setSaveSuccess(true);
+    setTimeout(() => setSaveSuccess(false), 2000);
   };
 
   const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -277,26 +346,30 @@ export function DeductionConfigPanel({ theme }: DeductionConfigProps) {
     const reader = new FileReader();
     reader.onload = (evt) => {
       try {
-        const bstr = evt.target?.result;
-        const wb = XLSX.read(bstr, { type: 'binary' });
+        const dataBuffer = evt.target?.result;
+        const wb = XLSX.read(dataBuffer, { type: 'array' });
         const wsName = wb.SheetNames[0];
         const ws = wb.Sheets[wsName];
         const rows = XLSX.utils.sheet_to_json(ws);
         
         if (rows.length > 0) {
           const parsedData = parseExcelData(rows);
-          setData(parsedData);
-          if (parsedData.length > 0) {
-            setSelectedCityId(parsedData[0].id);
-            
+          if (parsedData.length === 0) {
+            alert('导入成功但未解析到有效数据，请检查 Excel 列名是否包含“城市”和“团队名称”。');
+            return;
           }
+          setData(parsedData);
+          setSelectedCityId(parsedData[0].id);
+          alert('导入成功！已更新配置列表（别忘了点击“保存配置”永久保存到服务器）。');
+        } else {
+          alert('Excel 文件为空，未读取到数据。');
         }
       } catch (error) {
         console.error('Error importing Excel:', error);
         alert('导入失败，请检查文件格式。');
       }
     };
-    reader.readAsBinaryString(file);
+    reader.readAsArrayBuffer(file);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }

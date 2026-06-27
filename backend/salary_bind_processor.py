@@ -12,6 +12,7 @@ from openpyxl.styles import Font, Alignment, PatternFill
 import os
 import glob
 import time
+import re
 from datetime import datetime
 import asyncio
 import functools
@@ -209,12 +210,14 @@ async def run_salary_bind_gen(source_path, target_path=None, base_path=None, ded
                     if not city_name: continue
                     for site_data in city_data.get('sites', []):
                         team_name = str(site_data.get('name', '')).strip()
+                        team_name = re.sub(r'_?新专送', '', team_name)
                         if team_name:
                             config_mapping[team_name] = city_name
             else:
                 # 兼容老版本
                 for rule in deductionRules:
                     teamName = str(rule.get("teamName", "")).strip()
+                    teamName = re.sub(r'_?新专送', '', teamName)
                     city = str(rule.get("city", "")).strip()
                     if teamName and city:
                         config_mapping[teamName] = city
@@ -447,6 +450,7 @@ async def run_salary_bind_gen(source_path, target_path=None, base_path=None, ded
                         continue
                     
                     ws = workbook.add_worksheet(sheet_name)
+                    writer.sheets[sheet_name] = ws
                     
                     for i, col in enumerate(df_obj.columns):
                         is_id = "ID" in str(col).upper()
@@ -512,6 +516,7 @@ async def run_salary_bind_gen(source_path, target_path=None, base_path=None, ded
                         continue
                         
                     ws = city_workbook.add_worksheet(s_name)
+                    city_writer.sheets[s_name] = ws
                     
                     for i, col in enumerate(d_obj.columns):
                         is_id = "ID" in str(col).upper()

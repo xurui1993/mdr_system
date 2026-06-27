@@ -1133,7 +1133,7 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                 df_sht2['往期累计核算记录'] = df_sht2.apply(get_past_notes, axis=1)
                 df_sht2['往期月费是否已扣'] = df_sht2.apply(get_past_fee_deducted, axis=1)
 
-                custom_deductions = [str(c) for c in df_rules.columns if c not in ["城市", "团队名称", "团队ID"] and not str(c).endswith("_maxDays") and not str(c).endswith("_isKw")]
+                custom_deductions = [str(c) for c in df_rules.columns if c in ["安全基金", "使用费", "非蜂卡", "月费"]]
                 
                 cfg_team = next((c for c in df_rules.columns if "团队名称" in str(c) and "maxDays" not in str(c)), None)
                 if cfg_team:
@@ -1150,12 +1150,13 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                         df_rules_sub = df_rules_sub.drop(columns=overlap)
                         
                     def _match_cfg_team(tid):
-                        tid_str = str(tid).strip()
+                        tid_str = re.sub(r'_?新专送', '', str(tid).strip())
                         for c_team in df_rules_sub['_cfg_team']:
-                            if c_team == tid_str:
+                            c_team_clean = re.sub(r'_?新专送', '', str(c_team).strip())
+                            if c_team_clean == tid_str:
                                 return c_team
                         log(f"Debug: Match failed for tid='{tid_str}'. Config teams sample: {list(df_rules_sub['_cfg_team'])[:5]}...", "WARN")
-                        return tid_str
+                        return str(tid).strip()
                     
                     df_sht2['_mapped_tid'] = df_sht2['_tid'].apply(_match_cfg_team)
                     df_sht2 = pd.merge(df_sht2, df_rules_sub, left_on='_mapped_tid', right_on='_cfg_team', how='left')
@@ -2048,7 +2049,7 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                 df_sht2['往期累计核算记录'] = df_sht2.apply(get_past_notes, axis=1)
                 df_sht2['往期月费是否已扣'] = df_sht2.apply(get_past_fee_deducted, axis=1)
 
-                custom_deductions = [str(c) for c in df_rules.columns if c not in ["城市", "团队名称", "团队ID"] and not str(c).endswith("_maxDays") and not str(c).endswith("_isKw")]
+                custom_deductions = [str(c) for c in df_rules.columns if c in ["安全基金", "使用费", "非蜂卡", "月费"]]
                 
                 cfg_team = next((c for c in df_rules.columns if "团队名称" in str(c) and "maxDays" not in str(c)), None)
                 if cfg_team:
@@ -2065,12 +2066,13 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                         df_rules_sub = df_rules_sub.drop(columns=overlap)
 
                     def _match_cfg_team(tid):
-                        tid_str = str(tid).strip()
+                        tid_str = re.sub(r'_?新专送', '', str(tid).strip())
                         for c_team in df_rules_sub['_cfg_team']:
-                            if c_team == tid_str:
+                            c_team_clean = re.sub(r'_?新专送', '', str(c_team).strip())
+                            if c_team_clean == tid_str:
                                 return c_team
                         log(f"Debug2: Match failed for tid='{tid_str}'. Config teams sample: {list(df_rules_sub['_cfg_team'])[:5]}...", "WARN")
-                        return tid_str
+                        return str(tid).strip()
 
                     df_sht2['_mapped_tid'] = df_sht2['_tid'].apply(_match_cfg_team)
                     df_sht2 = pd.merge(df_sht2, df_rules_sub, left_on='_mapped_tid', right_on='_cfg_team', how='left')
