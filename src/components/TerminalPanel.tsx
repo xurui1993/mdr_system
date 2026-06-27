@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import { LogEntry } from '../types';
 
-export function TerminalPanel({ logs, progress = 0, progressText = '', appTheme = 'dark' }: { logs: LogEntry[], progress?: number, progressText?: string, appTheme?: 'light' | 'dark' }) {
+export function TerminalPanel({ logs, progress = 0, progressText = '', appTheme = 'dark', isRunning = false }: { logs: LogEntry[], progress?: number, progressText?: string, appTheme?: 'light' | 'dark', isRunning?: boolean }) {
  const scrollRef = useRef<HTMLDivElement>(null);
 
  useEffect(() => {
@@ -80,7 +80,7 @@ export function TerminalPanel({ logs, progress = 0, progressText = '', appTheme 
  </div>
 
  {/* Futuristic Progress Bar */}
- {progress > 0 && (
+ {isRunning && progress > 0 && (
  <div className={`w-full shrink-0 relative z-30 ${appTheme === 'light' ? 'bg-white border-slate-200' : 'bg-[#010308]/90 border-sky-500/20'} border-t px-6 py-3 `}>
  <div className="flex justify-between items-center mb-1.5 font-mono text-[11px] sm:text-[12px]">
  <div className={`${appTheme === 'light' ? 'text-sky-600' : 'text-sky-400 drop-shadow-[0_0_5px_rgba(56,189,248,0.6)]'} flex items-center gap-2`}>

@@ -707,9 +707,9 @@ class MergePenaltyRecords:
                 data["操作状态"] = data["违规状态"]
                 sum_list.append(data)       
             else:
-                data["事件原因"] = data["违规类型"]
-                data["事件状态"] = data["申诉状态"]
-                data["操作状态"] = data["违规状态"]
+                data["事件原因"] = data.get("违规类型", data.get("违规原因", ""))
+                data["事件状态"] = data.get("申诉状态", "")
+                data["操作状态"] = data.get("违规状态", "")
                 sum_list.append(data)
             
         sum_data = pd.concat(sum_list)

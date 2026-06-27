@@ -7,8 +7,10 @@ function TreeHoverMenu({ title, basePath, fetchFiles, fetchWithAuth }: any) {
   const [isOpen, setIsOpen] = useState(false);
   const [treeData, setTreeData] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
+  const timeoutRef = useRef<any>(null);
 
   const handleMouseEnter = async () => {
+    if (timeoutRef.current) clearTimeout(timeoutRef.current);
     setIsOpen(true);
     if (treeData.length === 0 && !loading) {
       setLoading(true);
@@ -27,7 +29,14 @@ function TreeHoverMenu({ title, basePath, fetchFiles, fetchWithAuth }: any) {
     }
   };
 
+  const handleMouseLeave = () => {
+    timeoutRef.current = setTimeout(() => {
+      setIsOpen(false);
+    }, 150);
+  };
+
   const renderTree = (items: any[]) => {
+
     return (
       <ul className="pl-4 border-l border-cyan-500/10 ml-2 mt-1 space-y-1">
         {items.map((item, idx) => (
@@ -62,7 +71,7 @@ function TreeHoverMenu({ title, basePath, fetchFiles, fetchWithAuth }: any) {
     <div 
       className="relative z-50 group" 
       onMouseEnter={handleMouseEnter} 
-      onMouseLeave={() => setIsOpen(false)}
+      onMouseLeave={handleMouseLeave}
     >
       <button 
         onClick={() => fetchFiles(basePath)} 
@@ -377,7 +386,7 @@ export function RightPanel({ theme, activeTab, config, isRunning }: { theme: The
   云端上传资源 (Uploads)
   </button>
   </div>
-  <div className="flex px-6 py-2 gap-2 bg-[#060b18] light:bg-slate-50 border-b border-sky-500/10 light:border-slate-200 overflow-x-auto scrollbar-hide">
+  <div className="flex px-6 py-2 gap-2 bg-[#060b18] light:bg-slate-50 border-b border-sky-500/10 light:border-slate-200 flex-wrap">
   <span className="text-[12px] text-slate-500 my-auto mr-1 font-mono shrink-0">快速访问:</span>
   {internalTab === 'outputs' ? (
   <>

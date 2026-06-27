@@ -248,14 +248,14 @@ export default function App() {
 
   const logs = logsMap[activeMenu] || [{ text: theme.log_init, level: "INFO" }];
 
-  const setLogs = (updater: any) => {
+  const setLogs = (updater: any, target: string = activeMenu) => {
     // Determine the target menu. If this is called from within an async task,
     // we should ideally use the action name but for simplicity we can use activeMenu.
     // To make it robust, we'll keep activeMenu.
     setLogsMap(prev => {
-        const prevLogs = prev[activeMenu] || [{ text: theme.log_init, level: "INFO" }];
+        const prevLogs = prev[target] || [{ text: theme.log_init, level: "INFO" }];
         const newLogs = typeof updater === "function" ? updater(prevLogs) : updater;
-        return { ...prev, [activeMenu]: newLogs };
+        return { ...prev, [target]: newLogs };
     });
   };
 
@@ -456,12 +456,12 @@ export default function App() {
     }).catch((err) => console.error("Failed to save config to backend", err));
   }, [appConfig]);
 
-  const appendLog = (text: string, level: LogEntry["level"] = "INFO") => {
+  const appendLog = (text: string, level: LogEntry["level"] = "INFO", target: string = activeMenu) => {
     if (isMuttering(text)) {
       if (seenLogs.current.has(text)) return;
       seenLogs.current.add(text);
     }
-    setLogs((prev) => [...prev, { text, level }]);
+    setLogs((prev: any) => [...prev, { text, level }], target);
   };
 
   const [toastMsg, setToastMsg] = useState<{
@@ -1165,10 +1165,10 @@ export default function App() {
               if (data.type === "log") {
                 if (data.msg.includes("!!CITY!!")) {
                   const parts = data.msg.split("!!CITY!!");
-                  appendLog(parts[0], data.level);
+                  appendLog(parts[0], data.level, action);
                   setAppConfig((prev) => ({ ...prev, city: parts[1] }));
                 } else {
-                  appendLog(data.msg, data.level);
+                  appendLog(data.msg, data.level, action);
                 }
               } else if (data.type === "progress") {
                 setProgress(Math.floor(data.value * 100), action);
@@ -1182,7 +1182,7 @@ export default function App() {
                     `执行失败: ${data.result_msg}`,
                     action
                   );
-                  appendLog(`[ERROR] 执行失败: ${data.result_msg}`, "ERROR");
+                  appendLog(`[ERROR] 执行失败: ${data.result_msg}`, "ERROR", action);
                 } else {
                   setProgress(100, action);
                   setProgressText(
@@ -1196,7 +1196,7 @@ export default function App() {
                 }
 
                 if (data.status === "success") {
-                  appendLog(`>>> 🎉 任务完成！`, "SUCCESS");
+                  appendLog(`>>> 🎉 任务完成！`, "SUCCESS", action);
                   confetti({
                     particleCount: 150,
                     spread: 100,
@@ -1208,6 +1208,7 @@ export default function App() {
                   appendLog(
                     `[引擎断开] ${data.result_msg || "发生未知错误"}`,
                     "ERROR",
+                    action
                   );
                 }
               }
@@ -1221,6 +1222,7 @@ export default function App() {
       appendLog(
         `[ERROR] 本地后端服务未响应，请确保通过 node server.ts 正常启动！: ${String(err)}`,
         "ERROR",
+        action
       );
       showToast("无法连接运算引擎", "error");
       finishAction();
@@ -1274,25 +1276,27 @@ export default function App() {
           appendLog(
             `[SYS] 检测到系统高速缓存，自动建立数据源软链接: ${smartData.path}`,
             "INFO",
+            targetAction
           );
         } else {
           showToast("必须先选择干活灶台 (有效的数据目录) 才能执行！", "warn");
           appendLog(
             `[ERROR] 核心数据槽位 (干活灶台) 未挂载，拒绝执行！`,
             "ERROR",
+            targetAction
           );
           setRunningTask(null);
           return;
         }
       } catch (err) {
         showToast("无法校验干活灶台目录", "error");
-        appendLog(`[ERROR] 目录校验失败: ${err}`, "ERROR");
+        appendLog(`[ERROR] 目录校验失败: ${err}`, "ERROR", targetAction);
         setRunningTask(null);
         return;
       }
     }
 
-    appendLog(`大王叫我来巡山... 正在建立高速 RPC 桥接...`, "INFO");
+    appendLog(`大王叫我来巡山... 正在建立高速 RPC 桥接...`, "INFO", targetAction);
 
     try {
       const response = await fetchWithAuth("/api/run", {
@@ -1366,10 +1370,10 @@ export default function App() {
               if (data.type === "log") {
                 if (data.msg.includes("!!CITY!!")) {
                   const parts = data.msg.split("!!CITY!!");
-                  appendLog(parts[0], data.level);
+                  appendLog(parts[0], data.level, targetAction);
                   setAppConfig((prev) => ({ ...prev, city: parts[1] }));
                 } else {
-                  appendLog(data.msg, data.level);
+                  appendLog(data.msg, data.level, targetAction);
                 }
               } else if (data.type === "progress") {
                 setProgress(Math.floor(data.value * 100), targetAction);
@@ -1383,7 +1387,7 @@ export default function App() {
                     `执行失败: ${data.result_msg}`,
                     targetAction
                   );
-                  appendLog(`[ERROR] 执行失败: ${data.result_msg}`, "ERROR");
+                  appendLog(`[ERROR] 执行失败: ${data.result_msg}`, "ERROR", targetAction);
                 } else {
                   setProgress(100, targetAction);
                   setProgressText(
@@ -1416,7 +1420,7 @@ export default function App() {
                   if (data.stats) {
                     setTaskStats(data.stats);
                   }
-                  appendLog(`>>> 🎉 任务完成！`, "SUCCESS");
+                  appendLog(`>>> 🎉 任务完成！`, "SUCCESS", targetAction);
                   confetti({
                     particleCount: 150,
                     spread: 100,
@@ -1425,17 +1429,19 @@ export default function App() {
                   });
                   showDesktopNotification("任务执行完毕", "该次核算已圆满完成！");
                   if (data.out_file) {
-                    appendLog(`>>> 📦 生成的工作薄已保存至: ${data.out_file}，请点击【导出列表】查看下载`, "SUCCESS");
+                    appendLog(`>>> 📦 生成的工作薄已保存至: ${data.out_file}，请点击【导出列表】查看下载`, "SUCCESS", targetAction);
                   }
                   appendLog(
                     `内核线程池已被挂起并进入冷休眠，内存资源释放完成。`,
                     "INFO",
+                    targetAction
                   );
                   showToast("任务圆满完成!", "success");
                 } else {
                   appendLog(
                     `[引擎断开] ${data.result_msg || "发生未知错误"}`,
                     "ERROR",
+                    targetAction
                   );
                   showToast(
                     `发生异常: ${data.result_msg || "未知错误"}`,
@@ -1453,6 +1459,7 @@ export default function App() {
       appendLog(
         `[ERROR] 本地后端服务未响应，请确保通过 node server.ts 正常启动！: ${String(err)}`,
         "ERROR",
+        targetAction
       );
       showToast("无法连接运算引擎", "error");
       setRunningTask(null);
@@ -1574,7 +1581,7 @@ export default function App() {
                 <div className="absolute top-0 right-0 w-[2px] h-full bg-gradient-to-b from-transparent via-sky-400/20 to-transparent opacity-30" />
                 <IssueOrderActionPanel
                   theme={theme}
-                  isRunning={runningTask === "core"}
+                  isRunning={runningTask === "issue_orders"}
                   onRun={() => handleRun({ action: "issue_orders" })}
                   progress={progress}
                 />
@@ -1755,6 +1762,7 @@ export default function App() {
                     logs={logs}
                     progress={progress}
                     progressText={progressText}
+                    isRunning={runningTask !== null}
                   />
                 </div>
               </div>
