@@ -1105,6 +1105,7 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                         for c_team in df_rules_sub['_cfg_team']:
                             if c_team == tid_str:
                                 return c_team
+                        log(f"Debug: Match failed for tid='{tid_str}'. Config teams sample: {list(df_rules_sub['_cfg_team'])[:5]}...", "WARN")
                         return tid_str
                     
                     df_sht2['_mapped_tid'] = df_sht2['_tid'].apply(_match_cfg_team)
@@ -1492,11 +1493,15 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                                 else:
                                     # Fallback to rules_data
                                     wtd_idx = rules_headers.index(matched_header)
+                                    matched_in_rule_row = False
                                     for rule_row in rules_data:
                                         rt_name = str(rule_row[team_name_idx]).strip() if pd.notna(rule_row[team_name_idx]) else ""
                                         if rt_name and rt_name == r5_clean:
                                             val = rule_row[wtd_idx]
+                                            matched_in_rule_row = True
                                             break
+                                    if not matched_in_rule_row and r5_clean:
+                                        log(f"Debug WTD: '{r5_clean}' not found in rules. Sample: {[str(r[team_name_idx]).strip() for r in rules_data[:5]]}", "WARN")
                                 memo_wtd[cache_key] = val
                     fast_vals.append(val)
                     matched_headers_list.append(matched_header)
@@ -1974,6 +1979,7 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                         for c_team in df_rules_sub['_cfg_team']:
                             if c_team == tid_str:
                                 return c_team
+                        log(f"Debug2: Match failed for tid='{tid_str}'. Config teams sample: {list(df_rules_sub['_cfg_team'])[:5]}...", "WARN")
                         return tid_str
 
                     df_sht2['_mapped_tid'] = df_sht2['_tid'].apply(_match_cfg_team)
