@@ -1,3 +1,10 @@
+# ==========================================
+# 异步任务调度与基础功能服务: tasks.py
+# 本文件主要用于：
+# 1. 封装 Server-Sent Events (SSE) 事件创建方法，向前端推送流式日志
+# 2. 包含问题单剔除（跨表匹配剔除薪资表问题单）、蓝橙单价重刷、兼职报表汇总等功能
+# 3. 异步包裹启动主薪资计算 (processor) 和发薪合并工具的执行
+# ==========================================
 import os
 import glob
 import pandas as pd
@@ -9,15 +16,26 @@ from datetime import datetime
 import re
 
 def create_log_event(msg, level="INFO"):
+    # 处理逻辑：日志输出及前端进度条回调事件生成
     return f"data: {json.dumps({'type': 'log', 'msg': msg, 'level': level})}\n\n"
 
-def create_progress_event(value):
-    return f"data: {json.dumps({'type': 'progress', 'value': value})}\n\n"
+def create_progress_event(value, text=""):
+    # 处理逻辑：create_progress_event 的主要执行逻辑
+    return f"data: {json.dumps({'type': 'progress', 'value': value, 'text': text})}\n\n"
 
-def create_finish_event(status="success", result_msg="完成"):
-    return f"data: {json.dumps({'type': 'finish', 'status': status, 'result_msg': result_msg})}\n\n"
+def create_finish_event(status="success", result_msg="完成", out_file="", stats_info=None):
+    # 处理逻辑：create_finish_event 的主要执行逻辑
+    return f"data: {json.dumps({'type': 'finish', 'status': status, 'result_msg': result_msg, 'out_file': out_file, 'stats': stats_info})}\n\n"
+
+def _safe_str_apply(x):
+    # 处理逻辑：_safe_str_apply 的主要执行逻辑
+    if pd.isna(x): return ""
+    if isinstance(x, (int, float)):
+        return format(x, ".0f") if float(x) == int(x) else str(x)
+    return str(x).strip(' ="\t\r\n')
 
 async def run_remove_problem_orders_gen(salary_file, problem_file):
+    # 处理逻辑：作为核心异步任务入口，负责启动具体的业务流程计算
     yield create_progress_event(0.1)
     yield create_log_event(">>> 正在解析【问题单剔除工作薄】...", "INFO")
     
@@ -29,7 +47,8 @@ async def run_remove_problem_orders_gen(salary_file, problem_file):
 
         for sheet_name in xls.sheet_names:
             try:
-                df = pd.read_excel(problem_file, sheet_name=sheet_name, dtype=str)
+                df = pd.read_excel(problem_file, sheet_name=sheet_name, dtype=object)
+                for c in df.columns: df[c] = df[c].apply(_safe_str_apply)
                 df.columns = [str(c).strip() for c in df.columns]
 
                 order_col = None
@@ -181,13 +200,14 @@ async def run_remove_problem_orders_gen(salary_file, problem_file):
         yield create_progress_event(1.0)
         yield create_log_event(f">>> 🎉 剔除完成！成功匹配并更新了 {update_count} 条记录。", "SUCCESS")
         yield create_log_event(f"-> 源头合集已归档至【{archive_sheet_name}】子表中，列宽已全部自适应排版！", "SUCCESS")
-        yield create_finish_event("success", "清理完毕")
+        yield create_finish_event("success", "清理完毕", salary_file)
 
     except Exception as e:
         yield create_log_event(f">>> [错误] 执行问题单剔除时发生异常: {e}", "ERROR")
         yield create_finish_event("error", str(e))
 
 async def run_raise_price_gen(salary_file, price_file):
+    # 处理逻辑：作为核心异步任务入口，负责启动具体的业务流程计算
     from collections import defaultdict
     yield create_progress_event(0.1)
     yield create_log_event(">>> 正在解析【蓝橙价格提审】文件...", "INFO")
@@ -199,15 +219,24 @@ async def run_raise_price_gen(salary_file, price_file):
         else:
             xls = pd.ExcelFile(price_file)
             sht_name = "兼职价格档案明细" if "兼职价格档案明细" in xls.sheet_names else xls.sheet_names[0]
-            df_price = pd.read_excel(price_file, sheet_name=sht_name, dtype=str)
+            df_price = pd.read_excel(price_file, sheet_name=sht_name, dtype=object)
+            for c in df_price.columns: df_price[c] = df_price[c].apply(_safe_str_apply)
 
         for col in df_price.columns:
             df_price[col] = df_price[col].astype(str).str.replace(r'^[="\s\t]+|[="\s\t]+$', '', regex=True)
 
-        rider_id_idx = next((i for i, c in enumerate(df_price.columns) if ('id' in str(c).lower() or '编号' in str(c)) and ('骑手' in str(c) or '员工' in str(c))), 2)
-        rider_name_idx = next((i for i, c in enumerate(df_price.columns) if ('名' in str(c) or '姓名' in str(c)) and ('骑手' in str(c) or '员工' in str(c))), 3)
+        rider_id_idx = next((i for i, c in enumerate(df_price.columns) if str(c).strip() in ['风神骑手ID', '风神骑手id', '骑手ID', '员工ID']), next((i for i, c in enumerate(df_price.columns) if '风神骑手id' in str(c).lower() or (('id' in str(c).lower() or '编号' in str(c)) and ('骑手' in str(c) or '员工' in str(c)))), None))
+        rider_name_idx = next((i for i, c in enumerate(df_price.columns) if str(c).strip() in ['风神骑手姓名', '骑手姓名', '员工姓名', '姓名']), next((i for i, c in enumerate(df_price.columns) if '风神骑手姓名' in str(c) or (('名' in str(c) or '姓名' in str(c)) and ('骑手' in str(c) or '员工' in str(c)))), None))
+        date_idx = next((i for i, c in enumerate(df_price.columns) if str(c).strip() in ['日期', '账单时间', '时间']), next((i for i, c in enumerate(df_price.columns) if '日期' in str(c) or '账单时间' in str(c) or '时间' in str(c)), None))
+        station_idx = next((i for i, c in enumerate(df_price.columns) if str(c).strip() in ['站点名称', '团队名称']), next((i for i, c in enumerate(df_price.columns) if '站点名称' in str(c) or '团队名称' in str(c)), next((i for i, c in enumerate(df_price.columns) if ('团队' in str(c) or '站点' in str(c) or '营业部' in str(c)) and 'id' not in str(c).lower()), None)))
+        idcard_idx = next((i for i, c in enumerate(df_price.columns) if str(c).strip() in ['身份证', '身份证号', '证件号码', '证件']), next((i for i, c in enumerate(df_price.columns) if '身份证' in str(c) or '证件' in str(c)), None))
+        price_idx = next((i for i, c in enumerate(df_price.columns) if str(c).strip() in ['价格', '单价', '蓝橙单价', '蓝橙']), next((i for i, c in enumerate(df_price.columns) if '价格' in str(c) or '单价' in str(c) or '蓝橙' in str(c)), None))
+
+        if rider_id_idx is None: rider_id_idx = 2
+        if rider_name_idx is None: rider_name_idx = 3
 
         def _norm_date(val):
+            # 处理逻辑：数据规范化清洗，去除空值及格式错误的数据记录
             if pd.isna(val) or val is None: return ""
             s = str(val).strip().split(' ')[0].replace('/', '-')
             try:
@@ -216,23 +245,26 @@ async def run_raise_price_gen(salary_file, price_file):
             except: pass
             return s
 
+        price_mapping_idcard = {}
         price_mapping_id = {}
         price_mapping_name = {}
 
         for _, r in df_price.iterrows():
             try:
-                if len(r) > 8:
-                    date_val = _norm_date(r.iloc[1])
-                    station_val = str(r.iloc[5]).strip()
-                    price_val = str(r.iloc[8]).strip()
-                    r_id = str(r.iloc[rider_id_idx]).replace('.0', '').strip() if rider_id_idx < len(r) else ""
-                    r_name = str(r.iloc[rider_name_idx]).strip() if rider_name_idx < len(r) else ""
-                    if r_id: price_mapping_id[f"{date_val}_{station_val}_{r_id}"] = price_val
-                    if r_name: price_mapping_name[f"{date_val}_{station_val}_{r_name}"] = price_val
+                date_val = _norm_date(r.iloc[date_idx]) if date_idx is not None else (_norm_date(r.iloc[1]) if len(r) > 1 else "")
+                station_val = str(r.iloc[station_idx]).replace(' ','').replace('\u3000','').replace('\xa0','').replace('\n','').replace('\t','').strip() if station_idx is not None else (str(r.iloc[5]).replace(' ','').replace('\u3000','').replace('\xa0','').replace('\n','').replace('\t','').strip() if len(r) > 5 else "")
+                price_val = str(r.iloc[price_idx]).strip() if price_idx is not None else (str(r.iloc[8]).strip() if len(r) > 8 else "")
+                idcard_val = str(r.iloc[idcard_idx]).strip().upper() if idcard_idx is not None else ""
+                r_id = str(r.iloc[rider_id_idx]).replace('.0', '').strip() if rider_id_idx < len(r) else ""
+                r_name = str(r.iloc[rider_name_idx]).strip() if rider_name_idx < len(r) else ""
+                
+                if idcard_val: price_mapping_idcard[f"{date_val}_{station_val}_{idcard_val}"] = price_val
+                if r_id: price_mapping_id[f"{date_val}_{station_val}_{r_id}"] = price_val
+                if r_name: price_mapping_name[f"{date_val}_{station_val}_{r_name}"] = price_val
             except: pass
 
         yield create_progress_event(0.3)
-        yield create_log_event(f"-> 最新价格档案解析成功 (ID规则数: {len(price_mapping_id)} | 姓名规则数: {len(price_mapping_name)})", "INFO")
+        yield create_log_event(f"-> 最新价格档案解析成功 (新主键: {len(price_mapping_idcard)} | ID规则数: {len(price_mapping_id)} | 姓名规则数: {len(price_mapping_name)})", "INFO")
         yield create_log_event(">>> 正在打开【工资表工作薄】进行单价替换...", "INFO")
         await asyncio.sleep(0.1)
 
@@ -243,7 +275,15 @@ async def run_raise_price_gen(salary_file, price_file):
             return
 
         ws_daily = wb["日单量"]
-        date_col, team_col, id_col, name_col, price_col = 1, 2, 3, 4, 9
+        
+        # 寻找列索引
+        header_vals = [str(ws_daily.cell(row=1, column=c).value or "").strip() for c in range(1, ws_daily.max_column + 1)]
+        date_col = next((i+1 for i, c in enumerate(header_vals) if '账单' in c or '时间' in c or '列' in c and i==0), 1)
+        team_col = next((i+1 for i, c in enumerate(header_vals) if '团队名称' in c), next((i+1 for i, c in enumerate(header_vals) if ('团队' in c and 'id' not in c.lower()) or ('列' in c and i==1)), 2))
+        idcard_col = next((i+1 for i, c in enumerate(header_vals) if '身份证' in c or '证件' in c), None)
+        id_col = next((i+1 for i, c in enumerate(header_vals) if 'id' in c.lower() or '编号' in c or '列' in c and i==2), 3)
+        name_col = next((i+1 for i, c in enumerate(header_vals) if '名' in c and ('骑手' in c or '员工' in c) or '列' in c and i==3), 4)
+        price_col = next((i+1 for i, c in enumerate(header_vals) if '价格' in c or '单价' in c or '蓝橙' in c), 9)
 
         rider_prices_dict = defaultdict(set)
         rider_price_dates_dict = defaultdict(lambda: defaultdict(list))
@@ -253,13 +293,18 @@ async def run_raise_price_gen(salary_file, price_file):
             b_date_raw = str(ws_daily.cell(row=r_idx, column=date_col).value or "").strip()
             if not b_date_raw or b_date_raw == "None": continue
             b_date = _norm_date(b_date_raw)
-            team_name = str(ws_daily.cell(row=r_idx, column=team_col).value or "").strip()
+            team_name = str(ws_daily.cell(row=r_idx, column=team_col).value or "").replace(' ','').replace('\u3000','').replace('\xa0','').replace('\n','').replace('\t','').strip()
             r_id = str(ws_daily.cell(row=r_idx, column=id_col).value or "").replace('.0', '').strip()
             r_name = str(ws_daily.cell(row=r_idx, column=name_col).value or "").strip()
+            idcard = str(ws_daily.cell(row=r_idx, column=idcard_col).value or "").strip().upper() if idcard_col else ""
 
+            key_idcard = f"{b_date}_{team_name}_{idcard}"
             key_id = f"{b_date}_{team_name}_{r_id}"
             key_name = f"{b_date}_{team_name}_{r_name}"
-            price = price_mapping_id.get(key_id)
+            
+            price = None
+            if idcard: price = price_mapping_idcard.get(key_idcard)
+            if not price: price = price_mapping_id.get(key_id)
             if not price: price = price_mapping_name.get(key_name)
 
             if price is not None and str(price).strip() != "" and str(price).lower() != "nan":
@@ -279,6 +324,7 @@ async def run_raise_price_gen(salary_file, price_file):
             if price == "无单价": no_price_records.append((b_date, team_name, r_id, r_name))
 
         def format_dates_streak(date_strs):
+            # 处理逻辑：处理时间戳、日期字符串格式转换与周期计算
             if not date_strs: return ""
             d_objs = []
             for d in date_strs:
@@ -302,6 +348,7 @@ async def run_raise_price_gen(salary_file, price_file):
             return "、".join(formatted)
 
         def to_numeric_if_possible(val_str):
+            # 处理逻辑：to_numeric_if_possible 的主要执行逻辑
             if not val_str: return val_str
             try:
                 f = float(val_str)
@@ -378,6 +425,7 @@ async def run_raise_price_gen(salary_file, price_file):
 
         if leishen_price_col_idx != -1 and plan_col_idx != -1:
             def is_equal(v1, v2):
+                # 处理逻辑：is_equal 的主要执行逻辑
                 s1 = str(v1).strip() if v1 is not None else ""
                 s2 = str(v2).strip() if v2 is not None else ""
                 if s1 == s2: return True
@@ -403,12 +451,13 @@ async def run_raise_price_gen(salary_file, price_file):
 
         yield create_progress_event(1.0)
         yield create_log_event(f">>> 🎉 蓝橙单价重刷全部完成！新文件已覆盖: {os.path.basename(salary_file)}", "SUCCESS")
-        yield create_finish_event("success", "提审重刷完毕")
+        yield create_finish_event("success", "提审重刷完毕", salary_file)
     except Exception as e:
         yield create_log_event(f">>> [错误] 重刷蓝橙单价时发生异常: {e}", "ERROR")
         yield create_finish_event("error", str(e))
 
 async def run_summary_parttime_gen(folder, city):
+    # 处理逻辑：作为核心异步任务入口，负责启动具体的业务流程计算
     import glob
     import re
     yield create_progress_event(0.1)
@@ -482,6 +531,7 @@ async def run_summary_parttime_gen(folder, city):
             merged_filepath = os.path.join(folder, merged_filename)
 
             def clean_and_type_data(data, headers):
+                # 处理逻辑：数据规范化清洗，去除空值及格式错误的数据记录
                 safe_headers = []
                 seen = set()
                 for i, h in enumerate(headers):
@@ -598,7 +648,7 @@ async def run_summary_parttime_gen(folder, city):
 
             yield create_progress_event(1.0)
             yield create_log_event(f">>> 🎉 成功合并文件，并完成金装美化，存至: {merged_filepath}", "SUCCESS")
-            yield create_finish_event("success", "合并大表已生成")
+            yield create_finish_event("success", "合并大表已生成", merged_filepath)
         else:
             yield create_log_event(">>> 所选目录为空或只有无关文件，未生成合并总表~", "WARN")
             yield create_finish_event("error", "所选目录为空")
@@ -607,7 +657,8 @@ async def run_summary_parttime_gen(folder, city):
         yield create_log_event(f"合并报表时出现意外: {e}", "ERROR")
         yield create_finish_event("error", str(e))
 
-async def run_main_calculation_gen(city, selected_option, source_folder, base_path, theme, workspace_path=None, enable_interceptor=False):
+async def run_main_calculation_gen(city, selected_option, source_folder, base_path, theme, enable_interceptor=False, enable_cross_station_merge=False, deductionRules=None):
+    # 处理逻辑：作为核心异步任务入口，负责启动具体的业务流程计算
     import sys
     import os
     import threading
@@ -624,23 +675,44 @@ async def run_main_calculation_gen(city, selected_option, source_folder, base_pa
     loop = asyncio.get_running_loop()
     
     def log_cb(msg, level="INFO"):
+        # 处理逻辑：日志输出及前端进度条回调事件生成
         loop.call_soon_threadsafe(queue.put_nowait, create_log_event(msg, level))
         
     def progress_cb(value, text):
-        loop.call_soon_threadsafe(queue.put_nowait, create_progress_event(value))
-        loop.call_soon_threadsafe(queue.put_nowait, create_log_event(f"[{int(value*100)}%] {text}", "INFO"))
+        # 处理逻辑：日志输出及前端进度条回调事件生成
+        loop.call_soon_threadsafe(queue.put_nowait, create_progress_event(value, text))
         
     def finish_cb(status, result_msg, stats_info=None):
-        loop.call_soon_threadsafe(queue.put_nowait, create_finish_event(status, result_msg))
+        # 处理逻辑：日志输出及前端进度条回调事件生成
+        out_file = result_msg if status == 'success' else ''
+        loop.call_soon_threadsafe(queue.put_nowait, create_finish_event(status, result_msg, out_file, stats_info))
         loop.call_soon_threadsafe(queue.put_nowait, None)
+
+    import uuid
+    import threading
+    global_resume_events = getattr(sys.modules[__name__], 'GLOBAL_RESUME_EVENTS', {})
+    setattr(sys.modules[__name__], 'GLOBAL_RESUME_EVENTS', global_resume_events)
+    
+    def prompt_cb(title, message):
+        # 处理逻辑：日志输出及前端进度条回调事件生成
+        uid = str(uuid.uuid4())
+        event = threading.Event()
+        global_resume_events[uid] = {'event': event, 'result': False}
+        prompt_event_str = f"data: {json.dumps({'type': 'prompt', 'uuid': uid, 'title': title, 'message': message})}\n\n"
+        loop.call_soon_threadsafe(queue.put_nowait, prompt_event_str)
+        event.wait() # blocks the worker thread until frontend replies
+        res = global_resume_events[uid]['result']
+        del global_resume_events[uid]
+        return res
         
     def worker():
+        # 处理逻辑：worker 的主要执行逻辑
         try:
-            process_rider_data(city, selected_option, source_folder, base_path, log_cb, progress_cb, finish_cb, theme, workspace_path=workspace_path, enable_interceptor=enable_interceptor)
+            process_rider_data(city, selected_option, source_folder, base_path, log_cb, progress_cb, finish_cb, theme, enable_interceptor=enable_interceptor, enable_cross_station_merge=enable_cross_station_merge, prompt_callback=prompt_cb, deductionRules=deductionRules)
         except Exception as e:
             finish_cb("error", str(e))
 
-    yield create_log_event(">>> ⚙️ 牛马引擎轰鸣，开始新一轮的搬砖...", "INFO")
+    yield create_log_event(">>> ⚙️ 你这孩子，一天到晚瞎想啥呢？能在大王手底下干活，那是咱们老猪家祖祖辈辈修来的福气！新一轮工作开始了...", "INFO")
     
     thread = threading.Thread(target=worker, daemon=True)
     thread.start()
@@ -651,3 +723,43 @@ async def run_main_calculation_gen(city, selected_option, source_folder, base_pa
             break
         yield event
 
+async def run_issue_orders_gen(config_data, base_path):
+    # 处理逻辑：作为核心异步任务入口，负责启动具体的业务流程计算
+    import asyncio
+    import threading
+    from issue_orders import run_issue_orders_task
+
+    queue = asyncio.Queue()
+    loop = asyncio.get_running_loop()
+    
+    def log_cb(msg, level="INFO"):
+        # 处理逻辑：日志输出及前端进度条回调事件生成
+        loop.call_soon_threadsafe(queue.put_nowait, create_log_event(msg, level))
+        
+    def progress_cb(value, text):
+        # 处理逻辑：日志输出及前端进度条回调事件生成
+        loop.call_soon_threadsafe(queue.put_nowait, create_progress_event(value, text))
+        
+    def finish_cb(status, result_msg, stats_info=None):
+        # 处理逻辑：日志输出及前端进度条回调事件生成
+        out_file = result_msg if status == 'success' else ''
+        loop.call_soon_threadsafe(queue.put_nowait, create_finish_event(status, result_msg, out_file, stats_info))
+        loop.call_soon_threadsafe(queue.put_nowait, None)
+
+    yield create_log_event(">>> 🚀 正在启动问题单生成引擎...", "INFO")
+    
+    def worker():
+        # 处理逻辑：worker 的主要执行逻辑
+        try:
+            asyncio.run(run_issue_orders_task(config_data, base_path, log_cb, progress_cb, finish_cb))
+        except Exception as e:
+            finish_cb("error", str(e))
+
+    thread = threading.Thread(target=worker, daemon=True)
+    thread.start()
+    
+    while True:
+        event = await queue.get()
+        if event is None:
+            break
+        yield event

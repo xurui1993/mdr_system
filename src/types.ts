@@ -30,22 +30,29 @@ export interface Theme {
 
 export interface AppConfig {
   city: string;
-  cycle: string;
   issueCycle?: string;
   startDate?: string;
   endDate?: string;
   cookie?: string;
   basePath: string;
   sourcePath: string;
-  workspacePath: string;
+  salaryBindSourcePath?: string;
   cities: string[];
-  cycles: string[];
   issueCycles?: string[];
   issueSelectedCities?: string[];
   enableInterceptor?: boolean;
+  enableCrossStationMerge?: boolean;
+  action?: string;
 }
 
 export interface LogEntry {
   text: string;
   level: "INFO" | "SYSTEM" | "WARN" | "ERROR" | "SUCCESS";
+}
+
+export interface TaskHistoryRecord {
+  id: string;
+  name: string;
+  timestamp: string;
+  status: 'SUCCESS' | 'FAILED';
 }

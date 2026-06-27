@@ -3,3 +3,8 @@ uvicorn
 pandas
 openpyxl
 python-calamine
+lxml
+psutil
+xlsxwriter
+requests
+tqdm

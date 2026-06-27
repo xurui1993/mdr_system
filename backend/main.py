@@ -1,12 +1,26 @@
+# ==========================================
+# 核心后端接口服务 (FastAPI)
+# 本文件主要用于：
+# 1. 提供前端调用的REST API接口及SSE(Server-Sent Events)流式任务输出
+# 2. 调用 processor, tasks 等核心计算逻辑
+# 3. 提供本地资源管理器弹窗、系统状态监控等辅助接口
+# ==========================================
 from fastapi import FastAPI, Request
 from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+from typing import Optional
 import asyncio
 import os
 import sys
 import json
 import subprocess
+import tempfile
+import uuid
+try:
+    import psutil
+except ImportError:
+    psutil = None
 
 app = FastAPI(title="Aegis Payroll Core API")
 
@@ -19,22 +33,31 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
 class ConfigRequest(BaseModel):
     city: str
-    cycle: str
-    basePath: str
+    cycle: Optional[str] = ""
+    basePath: str = ""
     sourcePath: str
-    workspacePath: str = None
     action: str = None
     targetPath: str = None
     theme: dict = None
     issueSelectedCities: list[str] = None
+    startDate: str = None
+    endDate: str = None
+    cookie: str = None
     enableInterceptor: bool = False
+    enableCrossStationMerge: bool = False
+    deductionRules: list = []
+
+class FileRequest(BaseModel):
+    path: str
 
 CONFIG_FILE = ".aegis_config.json"
 
 @app.get("/api/config")
 def get_config():
+    # 处理逻辑：配置数据的读取与保存，用于状态持久化
     if os.path.exists(CONFIG_FILE):
         try:
             with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
@@ -45,6 +68,7 @@ def get_config():
 
 @app.post("/api/config")
 def save_config(params: dict):
+    # 处理逻辑：配置数据的读取与保存，用于状态持久化
     try:
         with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
             json.dump(params, f, ensure_ascii=False, indent=2)
@@ -52,28 +76,43 @@ def save_config(params: dict):
     except Exception as e:
         return {"success": False, "error": str(e)}
 
-@app.get("/api/dialog/folder")
-def select_folder(title: str = "选择文件夹 (Aegis)"):
+class DialogRequest(BaseModel):
+    title: str = "选择"
+
+@app.post("/api/dialog/folder")
+def select_folder(req: DialogRequest):
+    # 处理逻辑：处理文件或目录的选择交互及路径解析
+    title = req.title
     try:
+        tmp_path = os.path.join(tempfile.gettempdir(), f"path_folder_{uuid.uuid4().hex}.txt").replace('\\', '/')
         # 使用 subprocess 在主线程运行 tkinter，避免 FastAPI 线程池冲突
         code = f'''
 import tkinter as tk
 from tkinter import filedialog
-import sys
 root = tk.Tk()
 root.withdraw()
 root.attributes("-topmost", True)
 path = filedialog.askdirectory(title="{title}")
-sys.stdout.write(path)
+with open(r"{tmp_path}", "w", encoding="utf-8") as f:
+    f.write(path)
 '''
-        result = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True)
-        path = result.stdout.strip()
+        subprocess.run([sys.executable, "-c", code], capture_output=True, text=True)
+        path = ""
+        if os.path.exists(tmp_path):
+            with open(tmp_path, "r", encoding="utf-8") as f:
+                path = f.read().strip()
+            os.remove(tmp_path)
         return {"path": path, "error": ""}
     except Exception as e:
         return {"path": "", "error": str(e)}
 
-@app.get("/api/dialog/smart_source")
-def check_smart_source(basePath: str = ""):
+class SmartSourceRequest(BaseModel):
+    basePath: str = ""
+
+@app.post("/api/dialog/smart_source")
+def check_smart_source(req: SmartSourceRequest):
+    # 处理逻辑：check_smart_source 的主要执行逻辑
+    basePath = req.basePath
     candidates = []
     # 如果提供了 basePath (例如 appConfig.basePath)，则在其内部查找
     if basePath and os.path.exists(basePath):
@@ -89,49 +128,50 @@ def check_smart_source(basePath: str = ""):
     
     return {"path": "", "error": "not found", "smart": False}
 
-@app.get("/api/dialog/file")
-def select_file(title: str = "选择文件 (Aegis)"):
+@app.post("/api/dialog/file")
+def select_file(req: DialogRequest):
+    # 处理逻辑：处理文件或目录的选择交互及路径解析
+    title = req.title
     try:
+        tmp_path = os.path.join(tempfile.gettempdir(), f"path_file_{uuid.uuid4().hex}.txt").replace('\\', '/')
         code = f'''
 import tkinter as tk
 from tkinter import filedialog
-import sys
 root = tk.Tk()
 root.withdraw()
 root.attributes("-topmost", True)
 path = filedialog.askopenfilename(title="{title}")
-sys.stdout.write(path)
+with open(r"{tmp_path}", "w", encoding="utf-8") as f:
+    f.write(path)
 '''
-        result = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True)
-        path = result.stdout.strip()
+        subprocess.run([sys.executable, "-c", code], capture_output=True, text=True)
+        path = ""
+        if os.path.exists(tmp_path):
+            with open(tmp_path, "r", encoding="utf-8") as f:
+                path = f.read().strip()
+            os.remove(tmp_path)
         return {"path": path, "error": ""}
     except Exception as e:
         return {"path": "", "error": str(e)}
 
 @app.get("/api/default_paths")
 def get_default_paths():
-    import os
+    # 处理逻辑：获取并返回所需的系统状态或计算数据
+    return {"configPath": "../data/config.xlsx", "dataPath": "../uploads"}
+
+@app.post("/api/open/config")
+def open_config(req: FileRequest):
+    # 处理逻辑：配置数据的读取与保存，用于状态持久化
     import sys
-    
-    # 获取运行目录
     if getattr(sys, 'frozen', False):
         exe_dir = os.path.dirname(sys.executable)
-        parent_dir = os.path.dirname(exe_dir) if os.path.basename(exe_dir).lower() in ['dist', 'build'] else exe_dir
+        project_root = os.path.dirname(exe_dir) if os.path.basename(exe_dir).lower() in ['dist', 'build'] else exe_dir
     else:
         current_file_dir = os.path.dirname(os.path.abspath(__file__))
-        # backend 目录的上级是工程根目录
         project_root = os.path.dirname(current_file_dir) if os.path.basename(current_file_dir) == 'backend' else current_file_dir
-        parent_dir = project_root
         
-    config_path = os.path.join(parent_dir, "config.xlsx")
-    return {"configPath": config_path, "dataPath": parent_dir}
+    config_file = os.path.join(project_root, "../data/config.xlsx")
 
-@app.get("/api/open/config")
-def open_config(path: str):
-    if os.path.isfile(path) or str(path).lower().endswith(('.xlsx', '.xls')):
-        config_file = path
-    else:
-        config_file = os.path.join(path, "config.xlsx")
     if os.path.exists(config_file):
         try:
             import platform
@@ -147,8 +187,30 @@ def open_config(path: str):
     else:
         return {"success": False, "msg": "未找到配置文件", "exists": False}
 
-@app.get("/api/open/explorer")
-def open_explorer(path: str):
+@app.post("/api/resume_task")
+async def resume_task(req: Request):
+    # 处理逻辑：resume_task 的主要执行逻辑
+    data = await req.json()
+    uid = data.get("uuid")
+    action = data.get("action", False)
+    
+    import sys
+    # Try importing tasks if not already
+    import tasks
+    global_events = getattr(sys.modules['tasks'], 'GLOBAL_RESUME_EVENTS', {})
+    
+    if uid in global_events:
+        global_events[uid]['result'] = action
+        global_events[uid]['event'].set()
+        return {"success": True}
+    return {"success": False, "error": "Task wait event not found or expired."}
+
+@app.post("/api/open/explorer")
+def open_explorer(req: FileRequest):
+    # 处理逻辑：open_explorer 的主要执行逻辑
+    path = req.path
+    # 打印非乱码日志
+    print(f"INFO:     唤起本地资源管理器 -> {path}")
     if os.path.exists(path):
         if os.path.isfile(path):
             path = os.path.dirname(path)
@@ -166,10 +228,16 @@ def open_explorer(path: str):
     else:
         return {"success": False, "error": "目录不存在"}
 
-@app.get("/api/files")
-def list_files(path: str):
+@app.post("/api/files")
+def list_files(req: FileRequest, request: Request):
+    # 处理逻辑：处理文件或目录的选择交互及路径解析
+    path = req.path
+    wid = request.headers.get("x-workspace-id")
     if not path or not os.path.exists(path):
         return {"files": []}
+    
+    # 手动打印一次清晰的日志
+    print(f"INFO:     正在获取系统文件列表 -> {path}")
     
     if os.path.isfile(path):
         path = os.path.dirname(path)
@@ -192,12 +260,41 @@ def list_files(path: str):
     except Exception as e:
         return {"files": []}
 
+@app.get("/api/system/stats")
+def get_system_stats():
+    # 处理逻辑：获取并返回所需的系统状态或计算数据
+    if psutil is None:
+        return {"success": False, "error": "psutil not installed"}
+    try:
+        cpu = psutil.cpu_percent(interval=None) 
+        mem = psutil.virtual_memory()
+        
+        process = psutil.Process()
+        proc_cpu = process.cpu_percent(interval=0.1)
+        proc_mem = process.memory_info().rss / (1024 * 1024) # MB
+        
+        return {
+            "success": True,
+            "sysCpu": cpu,
+            "sysMemRatio": mem.percent,
+            "procCpu": proc_cpu,
+            "procMem": round(proc_mem, 2)
+        }
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
 @app.post("/api/run")
-async def run_calculation(config: ConfigRequest):
+async def run_calculation(config: ConfigRequest, request: Request):
     """
-    接收来自前端的运算指令，支持本地绝对路径或相对路径
+    接收来自前端的运算指令
     """
+    wid = request.headers.get("x-workspace-id")
+    if wid and config.sourcePath and wid not in config.sourcePath:
+       # For security
+       pass 
+
     async def event_generator():
+        # 处理逻辑：event_generator 的主要执行逻辑
         try:
             import tasks
 
@@ -218,7 +315,43 @@ async def run_calculation(config: ConfigRequest):
 
             elif config.action == 'salary_bind':
                 import salary_bind_processor
-                async for event in salary_bind_processor.run_salary_bind_gen(config.sourcePath):
+                async for event in salary_bind_processor.run_salary_bind_gen(config.sourcePath, config.targetPath, config.basePath, deductionRules=config.deductionRules):
+                    yield event
+                return
+
+            elif config.action == 'issue_orders':
+                # Build the configuration object for the spider engine
+                spider_config = {
+                    "crawler": {
+                        "cookie": config.cookie or ""
+                    },
+                    "run": {
+                        "target_cities": config.issueSelectedCities or [],
+                        "start_time": config.startDate or "",
+                        "end_time": config.endDate or ""
+                    },
+                    "cities": {
+                        "茂南"  : 20044122,
+                        "安宁" : 14648136,
+                        "香格里拉" : 20172179,
+                        "宜良"  : 20000533,
+                        "嵩明"  : 22492572,
+                        "维西" : 31016844,
+                        "三亚" : 31030156,
+                        "大连" : 31029684,
+                        "天津" : 31029676,
+                        "宁波" : 31029428,
+                        "泉州" : 31029436,
+                        "北京" :31029692,
+                        "上海" : 31019404,
+                        "广州" : 31021076,
+                        "深圳" : 31030116,
+                        "东莞" : 31030140,
+                        "韶关"  : 20044586,
+                        "保定"  : 31003092
+                    }
+                }
+                async for event in tasks.run_issue_orders_gen(spider_config, config.basePath):
                     yield event
                 return
 
@@ -231,8 +364,9 @@ async def run_calculation(config: ConfigRequest):
                     config.sourcePath, 
                     config.basePath, 
                     config.theme,
-                    config.workspacePath,
-                    config.enableInterceptor
+                    config.enableInterceptor,
+                    config.enableCrossStationMerge,
+                    deductionRules=config.deductionRules
                 ):
                     yield event
                 return
@@ -241,3 +375,24 @@ async def run_calculation(config: ConfigRequest):
             yield f"data: {json.dumps({'type': 'finish', 'status': 'error', 'result_msg': str(e)})}\n\n"
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")
+
+@app.post("/api/action_file")
+async def action_file(request: Request):
+    # 处理逻辑：处理文件或目录的选择交互及路径解析
+    data = await request.json()
+    action = data.get("action")
+    path = data.get("path")
+    import shutil
+    try:
+        if action == "delete":
+            if os.path.isdir(path):
+                shutil.rmtree(path)
+            else:
+                os.remove(path)
+            return {"success": True}
+        elif action == "create_dir":
+            os.makedirs(path, exist_ok=True)
+            return {"success": True}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+    return {"success": False, "error": "Unknown action"}

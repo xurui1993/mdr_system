@@ -1,98 +1,100 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Theme } from '../types';
-import { MUTTERINGS } from '../constants';
-import { motion } from 'motion/react';
+import { Activity, CheckCircle2, XCircle, Info, ChevronDown, ChevronUp } from 'lucide-react';
 
 interface ActionPanelProps {
   theme: Theme;
+  appTheme?: 'light' | 'dark';
   isRunning: boolean;
   onRun: () => void;
   progress: number;
+  taskStats: any;
 }
 
-export function ActionPanel({ theme, isRunning, onRun, progress }: ActionPanelProps) {
-  const [mutter, setMutter] = useState(MUTTERINGS[0]);
-  const [timerText, setTimerText] = useState('00:00.0');
-
-  const startTimeRef = React.useRef<number>(0);
-
-  useEffect(() => {
-    let interval: NodeJS.Timeout;
-    let timerInterval: NodeJS.Timeout;
-
-    if (!isRunning) {
-      interval = setInterval(() => {
-        setMutter(MUTTERINGS[Math.floor(Math.random() * MUTTERINGS.length)]);
-      }, 7000);
-      
-      if (progress < 100) {
-        setTimerText('00:00.0');
-      }
-    } else {
-      setMutter("“路漫漫其修远兮，吾将上下而求索...”");
-      
-      // Only set startTime once when starting
-      if (startTimeRef.current === 0 || progress === 0) {
-          startTimeRef.current = Date.now();
-      }
-
-      timerInterval = setInterval(() => {
-        const elapsed = Date.now() - startTimeRef.current;
-        const totalSeconds = Math.floor(elapsed / 1000);
-        const minutes = Math.floor(totalSeconds / 60);
-        const seconds = totalSeconds % 60;
-        const deciseconds = Math.floor((elapsed % 1000) / 100);
-        
-        setTimerText(
-          `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}.${deciseconds}`
-        );
-      }, 100);
-    }
-    
-    return () => {
-      if (interval) clearInterval(interval);
-      if (timerInterval) clearInterval(timerInterval);
-    };
-  }, [isRunning, progress]);
+export function ActionPanel({ appTheme = 'dark', isRunning, progress, taskStats }: ActionPanelProps) {
+  const [showGuide, setShowGuide] = useState(false);
 
   return (
-    <div className="flex flex-col w-full h-auto justify-center px-4 py-2">
-      <motion.button
-        animate={{
-          backgroundColor: isRunning ? "rgba(14, 165, 233, 0.15)" : "rgba(14, 165, 233, 0.15)",
-          color: isRunning ? "#38bdf8" : "#0ea5e9",
-          borderColor: isRunning ? "rgba(14, 165, 233, 0.5)" : "rgba(14, 165, 233, 0.5)",
-          boxShadow: isRunning ? "0 0 20px rgba(14, 165, 233, 0.3), inset 0 0 10px rgba(14, 165, 233, 0.2)" : "0 0 20px rgba(14, 165, 233, 0.3), inset 0 0 10px rgba(14, 165, 233, 0.2)",
-          scale: isRunning ? 0.98 : 1
-        }}
-        onClick={onRun}
-        disabled={isRunning}
-        className={`w-full h-[54px] rounded-xl border text-[16px] font-bold transition-all duration-300 flex items-center justify-center tracking-[0.2em] uppercase font-display backdrop-blur-sm ${isRunning ? 'cursor-not-allowed opacity-90' : 'hover:scale-[1.02] hover:bg-sky-500/30'}`}
-      >
-        {isRunning ? theme.btn_run_ing : progress >= 100 ? theme.btn_success : theme.btn_run}
-      </motion.button>
-
-      <div className="flex flex-col mt-6">
-        <div className="flex justify-between items-end mb-4 px-1">
-          <span className="text-[14px] text-sky-400 tracking-widest uppercase font-bold animate-breathe">{progress <= 0 && !isRunning ? '等待接入' : `[${progress}%] ${isRunning ? '运算中...' : progress >= 100 ? '操作成功' : ''}`}</span>
-          <span className={`font-mono text-[18px] font-bold tracking-widest animate-breathe-slow ${isRunning ? 'text-sky-400 drop-shadow-[0_0_8px_rgba(56,189,248,0.8)]' : progress >= 100 ? 'text-emerald-400 drop-shadow-[0_0_8px_rgba(52,211,153,0.8)]' : 'text-slate-500'}`}>
-            {timerText}
-          </span>
-        </div>
-
-        {/* Progress Bar */}
-        <div className="w-full bg-slate-900/80 border border-sky-500/20 h-2.5 rounded-full overflow-hidden relative shadow-inner">
-          <motion.div 
-            className="h-full bg-gradient-to-r from-sky-400 to-indigo-500 shadow-[0_0_10px_rgba(14,165,233,0.8)]"
-            initial={{ width: 0 }}
-            animate={{ width: `${progress}%` }}
-            transition={{ type: 'tween' }}
+    <div className={`flex flex-col w-full h-full p-2 md:p-3 relative overflow-y-auto custom-scrollbar ${appTheme === 'dark' ? 'text-slate-200' : 'text-slate-800'}`}>
+      {isRunning && (
+        <div className="absolute top-0 left-0 w-full h-1 bg-sky-500/20">
+          <div 
+            className="h-full bg-sky-500 transition-all duration-300" 
+            style={{ width: `${progress * 100}%` }}
           />
         </div>
+      )}
+      <div className="flex items-center justify-between mb-4 px-1 border-b pb-3 border-slate-700/30 light:border-slate-200 shrink-0 mt-2">
+        <div className="flex items-center gap-3">
+          <div className={`p-2 rounded-xl ${appTheme === 'light' ? 'bg-sky-50 text-sky-600' : 'bg-sky-500/10 text-sky-400'}`}>
+              <Activity className="w-5 h-5" />
+          </div>
+          <h3 className={`text-base font-bold tracking-wide ${appTheme === 'light' ? 'text-slate-800' : 'text-slate-100'}`}>
+            数据统计
+          </h3>
+        </div>
+      </div>
+      
+      <div className="flex flex-col gap-4 flex-1 px-1">
+        
+        {/* Dynamic Stats */}
+        <div className="grid grid-cols-2 gap-3 mb-2">
+          <div className={`flex flex-col gap-1 p-3 rounded-xl border ${appTheme === 'light' ? 'bg-slate-50 border-slate-200' : 'bg-slate-800/40 border-slate-700/50'}`}>
+            <div className="flex items-center gap-2 text-slate-500 dark:text-slate-400 mb-1">
+              <CheckCircle2 className="w-4 h-4 text-emerald-500" />
+              <span className="text-xs font-medium">成功处理</span>
+            </div>
+            <div className="flex items-baseline gap-1">
+              <span className="text-2xl font-bold text-slate-800 dark:text-slate-100">{taskStats?.success_count || 0}</span>
+              <span className="text-[10px] text-slate-400">次</span>
+            </div>
+          </div>
+          
+          <div className={`flex flex-col gap-1 p-3 rounded-xl border ${appTheme === 'light' ? 'bg-slate-50 border-slate-200' : 'bg-slate-800/40 border-slate-700/50'}`}>
+            <div className="flex items-center gap-2 text-slate-500 dark:text-slate-400 mb-1">
+              <XCircle className="w-4 h-4 text-rose-500" />
+              <span className="text-xs font-medium">失败/异常</span>
+            </div>
+            <div className="flex items-baseline gap-1">
+              <span className="text-2xl font-bold text-slate-800 dark:text-slate-100">{taskStats?.fail_count || 0}</span>
+              <span className="text-[10px] text-slate-400">次</span>
+            </div>
+          </div>
+        </div>
 
-        <span className="text-sky-500/60 text-[13px] font-mono text-right mt-6 tracking-[0.2em] pt-1">
-          {mutter}
-        </span>
+        <div className={`flex flex-col gap-1 p-3 rounded-xl border ${appTheme === 'light' ? 'bg-slate-50 border-slate-200' : 'bg-slate-800/40 border-slate-700/50'}`}>
+          <div className="flex items-center gap-2 text-slate-500 dark:text-slate-400 mb-1">
+            <Activity className="w-4 h-4 text-sky-500" />
+            <span className="text-xs font-medium">累计核算记录</span>
+          </div>
+          <div className="flex items-baseline gap-1">
+            <span className="text-2xl font-bold text-slate-800 dark:text-slate-100">{taskStats?.total_records_processed || 0}</span>
+            <span className="text-[10px] text-slate-400">条</span>
+          </div>
+        </div>
+
+        {/* Collapsible Guide */}
+        <div className="mt-auto pt-4 border-t border-slate-200 dark:border-slate-800/50">
+          <button 
+            onClick={() => setShowGuide(!showGuide)}
+            className="flex items-center justify-between w-full p-2 text-xs font-medium text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 transition-colors"
+          >
+            <div className="flex items-center gap-2">
+              <Info className="w-3.5 h-3.5" />
+              <span>操作指引</span>
+            </div>
+            {showGuide ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+          </button>
+          
+          {showGuide && (
+            <div className="flex flex-col gap-2 mt-2 px-2 pb-2 text-[11px] text-slate-500 dark:text-slate-400">
+              <div className="flex gap-2"><span className="text-sky-500">1.</span> 把报表拖入左侧响应区</div>
+              <div className="flex gap-2"><span className="text-sky-500">2.</span> 系统自动上传并解析</div>
+              <div className="flex gap-2"><span className="text-sky-500">3.</span> 在控制台查看进度或结果</div>
+            </div>
+          )}
+        </div>
+
       </div>
     </div>
   );
