@@ -585,6 +585,9 @@ export default function App() {
       const d = await r.json();
 
       if (d.success && d.path) {
+        setProgress(100, "core");
+        setProgressText(`>>> ✅ 上传完成！即将开始处理...`, "core");
+        await new Promise(resolve => setTimeout(resolve, 800));
         return d.path;
       } else {
         throw new Error(d.error || "上传失败");

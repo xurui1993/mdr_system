@@ -146,8 +146,33 @@ export function DeductionConfigPanel({ theme }: DeductionConfigProps) {
     const saved = localStorage.getItem(`deduction_config_v5_${wid}`);
     if (saved) {
       try {
-        const parsed = JSON.parse(saved);
+        let parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
+          // Migration: fix existing data where isKeywordBased might be incorrect
+          const kwCols = ["投诉", "差评", "违规虚假", "物流责", "不准时单", "超时", "T10", "提前点送达"];
+          parsed = parsed.map((city: any) => {
+            if (city.sites) {
+              city.sites = city.sites.map((site: any) => {
+                if (site.deductionItems) {
+                  site.deductionItems = site.deductionItems.map((item: any) => {
+                    if (kwCols.some(kw => item.name.includes(kw))) {
+                      return { 
+                        ...item, 
+                        isKeywordBased: true, 
+                        keywords: item.keywords || item.name,
+                        keywordAmounts: item.keywordAmounts && item.keywordAmounts.length > 0 ? item.keywordAmounts : [
+                          { id: Math.random().toString(36).substring(7), keyword: item.name, amount: item.amount }
+                        ]
+                      };
+                    }
+                    return item;
+                  });
+                }
+                return site;
+              });
+            }
+            return city;
+          });
           setData(parsed);
           setSelectedCityId(parsed[0]?.id || null);
           return;
@@ -199,14 +224,18 @@ export function DeductionConfigPanel({ theme }: DeductionConfigProps) {
       const deductionItems: DeductionItem[] = [];
       
       Object.keys(row).forEach(key => {
-        if (key === '城市' || key === '团队名称') return;
+        if (key === '城市' || key === '团队名称' || key === '团队ID') return;
+        
+        const kwCols = ["投诉", "差评", "违规虚假", "物流责", "不准时单", "超时", "T10", "提前点送达"];
+        const isKw = kwCols.some(kw => key.includes(kw));
         
         deductionItems.push({
           id: Math.random().toString(36).substring(7),
           name: key,
           amount: Number(row[key]) || 0,
-          isKeywordBased: false,
-          keywords: '',
+          isKeywordBased: isKw,
+          keywords: isKw ? key : '',
+          keywordAmounts: isKw ? [{ id: Math.random().toString(36).substring(7), keyword: key, amount: Number(row[key]) || 0 }] : undefined,
           maxDays: undefined
         });
       });

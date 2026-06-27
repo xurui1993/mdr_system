@@ -287,6 +287,55 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
             else:
                 flat_rules = deduction_rules
                 
+        if not flat_rules:
+            # Fallback to local config file if UI config is empty
+            config_wb_path = None
+            
+            # 优先检查应用根目录
+            for fname in ["config.xlsx", "配置.xlsx", "config.csv"]:
+                p = os.path.join(os.getcwd(), fname)
+                if os.path.exists(p):
+                    config_wb_path = p
+                    break
+            
+            if not config_wb_path:
+                for root, dirs, files in os.walk(source_folder):
+                    for file in files:
+                        if ("config" in file.lower() or "配置" in file) and not file.startswith("~$"):
+                            config_wb_path = os.path.join(root, file)
+                            break
+                    if config_wb_path: break
+                
+            if config_wb_path:
+                try:
+                    df_config = pd.read_excel(config_wb_path, sheet_name=0, dtype=object)
+                    for c in df_config.columns: df_config[c] = df_config[c].apply(_safe_str_apply)
+                    
+                    for _, row in df_config.iterrows():
+                        team_name = str(row.get("团队名称", "")).strip()
+                        if not team_name: continue
+                        flat_rule = {
+                            "城市": str(row.get("城市", "")).strip(),
+                            "团队名称": team_name,
+                            "团队ID": str(row.get("团队ID", "")).strip()
+                        }
+                        for c in df_config.columns:
+                            c_name = str(c).strip()
+                            if c_name not in ["城市", "团队名称", "团队ID"]:
+                                val = str(row.get(c, "")).strip()
+                                try:
+                                    flat_rule[c_name] = float(val) if val != "" else 0
+                                except:
+                                    flat_rule[c_name] = 0
+                                
+                                # 对于常见的按次（问题单）扣款列，必须标记为 isKw = True
+                                kw_cols = ["投诉", "差评", "违规虚假", "物流责", "不准时单", "超时", "T10", "提前点送达"]
+                                flat_rule[f"{c_name}_isKw"] = True if any(kw in c_name for kw in kw_cols) else False
+                        flat_rules.append(flat_rule)
+                    log(f"-> 🎯 成功从外部配置文件 [{os.path.basename(config_wb_path)}] 解析扣款规则！", "INFO")
+                except Exception as e:
+                    log(f"尝试解析外部配置文件失败: {e}", "WARN")
+
         if flat_rules:
             df_rules = pd.DataFrame(flat_rules)
             df_rules = df_rules.rename(columns={

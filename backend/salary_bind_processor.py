@@ -219,6 +219,37 @@ async def run_salary_bind_gen(source_path, target_path=None, base_path=None, ded
                     if teamName and city:
                         config_mapping[teamName] = city
         
+        if not config_mapping:
+            # Fallback to local config file if UI config is empty
+            config_wb_path = None
+            
+            # 优先检查应用根目录
+            for fname in ["config.xlsx", "配置.xlsx", "config.csv"]:
+                p = os.path.join(os.getcwd(), fname)
+                if os.path.exists(p):
+                    config_wb_path = p
+                    break
+                    
+            if not config_wb_path:
+                for root, dirs, fnames in os.walk(source_path):
+                    for fname in fnames:
+                        if ("config" in fname.lower() or "配置" in fname) and not fname.startswith("~$"):
+                            config_wb_path = os.path.join(root, fname)
+                            break
+                    if config_wb_path: break
+            
+            if config_wb_path:
+                try:
+                    df_config = pd.read_excel(config_wb_path, sheet_name=0, dtype=object)
+                    for _, row in df_config.iterrows():
+                        team_name = str(row.get("团队名称", "")).strip()
+                        city_name = str(row.get("城市", "")).strip()
+                        if team_name and city_name:
+                            config_mapping[team_name] = city_name
+                    yield create_log_event(f">>> 从外部配置文件 [{os.path.basename(config_wb_path)}] 中读取了 {len(config_mapping)} 个团队的城市映射！", "INFO")
+                except Exception as e:
+                    yield create_log_event(f">>> 尝试解析外部配置文件失败: {e}", "WARN")
+
         # 3. df_info matching
         info_id_col = get_col(df_info, ["骑手ID", "骑手id", "ID", "id"]) if not df_info.empty else None
         info_idcard_col = get_col(df_info, ["身份证", "身份证号", "身份证号码", "证件号", "骑手身份证"]) if not df_info.empty else None
