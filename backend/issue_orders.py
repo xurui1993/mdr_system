@@ -6,7 +6,6 @@
 # 3. 数据清洗引擎（DataCleaner）处理不准时单、超时单、问题单、索赔等
 # 4. 数据写入与文件合并操作，最后生成问题单汇总Excel
 # ==========================================
-from datetime import datetime
 from openpyxl import load_workbook
 from openpyxl.styles import Font, Alignment
 from tqdm import tqdm
@@ -116,7 +115,7 @@ class SpiderEngine:
 
     def time_stamp(self,date_str):
         # 处理逻辑：处理时间戳、日期字符串格式转换与周期计算
-        date_obj = datetime.strptime(date_str, "%Y-%m-%d %H:%M:%S")
+        date_obj = datetime.datetime.strptime(date_str, "%Y-%m-%d %H:%M:%S")
         timestamp_s = date_obj.timestamp()
         timestamp_ms = int(timestamp_s * 1000)
         return timestamp_ms
