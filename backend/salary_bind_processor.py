@@ -177,10 +177,10 @@ async def run_salary_bind_gen(source_path, target_path=None, base_path=None, ded
         if not df_detail.empty:
             df_order = df_detail.copy()
             # 取消容错机制，改用精准列匹配
-            order_col = "自然月有效完成单量" if "自然月有效完成单量" in df_order.columns else None
-            rid_col = "骑手id(风神)" if "骑手id(风神)" in df_order.columns else None
-            team_col = "团队名称" if "团队名称" in df_order.columns else None
-            name_col = "骑手姓名" if "骑手姓名" in df_order.columns else None
+            order_col = get_col(df_order, ["有效完成单"])
+            rid_col = get_col(df_order, ["骑手ID"])
+            team_col = get_col(df_order, ["团队名称"])
+            name_col = get_col(df_order, ["骑手姓名"])
             
             if order_col:
                 df_order[order_col] = pd.to_numeric(df_order[order_col], errors='coerce').fillna(0)
@@ -190,10 +190,13 @@ async def run_salary_bind_gen(source_path, target_path=None, base_path=None, ded
                 df_base = df_order.groupby([team_col, rid_col, name_col], as_index=False)[order_col].sum()
                 df_base.rename(columns={order_col: "单量汇总"}, inplace=True)
             else:
-                df_base = pd.DataFrame(columns=[rid_col or "RID", team_col or "TEAM", "单量汇总", name_col or "NAME"])
+                rid_col = rid_col or "RID"
+                team_col = team_col or "TEAM"
+                name_col = name_col or "NAME"
+                df_base = pd.DataFrame(columns=[rid_col, team_col, "单量汇总", name_col])
         else:
-            df_base = pd.DataFrame(columns=["RID", "TEAM", "单量汇总", "NAME"])
             rid_col = "RID"; team_col = "TEAM"; name_col = "NAME"
+            df_base = pd.DataFrame(columns=[rid_col, team_col, "单量汇总", name_col])
 
         # 2. Config City Mapping
         config_mapping = {}
@@ -251,11 +254,11 @@ async def run_salary_bind_gen(source_path, target_path=None, base_path=None, ded
                     yield create_log_event(f">>> 尝试解析外部配置文件失败: {e}", "WARN")
 
         # 3. df_info matching
-        info_id_col = get_col(df_info, ["骑手ID", "骑手id", "ID", "id"]) if not df_info.empty else None
-        info_idcard_col = get_col(df_info, ["身份证", "身份证号", "身份证号码", "证件号", "骑手身份证"]) if not df_info.empty else None
-        info_phone_col = get_col(df_info, ["手机", "手机号", "手机号码", "骑手手机", "联系电话"]) if not df_info.empty else None
-        info_name_col = get_col(df_info, ["骑手姓名", "姓名"]) if not df_info.empty else None
-        info_team_col = get_col(df_info, ["团队名称", "站点名称", "加盟商名称", "团队", "站点"]) if not df_info.empty else None
+        info_id_col = get_col(df_info, ["骑手ID"]) if not df_info.empty else None
+        info_idcard_col = get_col(df_info, ["身份证号"]) if not df_info.empty else None
+        info_phone_col = get_col(df_info, ["手机号"]) if not df_info.empty else None
+        info_name_col = get_col(df_info, ["骑手姓名"]) if not df_info.empty else None
+        info_team_col = get_col(df_info, ["团队名称"]) if not df_info.empty else None
         
         info_mapping = {}
         if info_id_col and not df_info.empty:
@@ -274,15 +277,15 @@ async def run_salary_bind_gen(source_path, target_path=None, base_path=None, ded
                     }
         
         # 4. df_fengshen matching
-        fs_id_col = get_col(df_fengshen, ["骑手ID", "骑手id", "ID", "id"]) if not df_fengshen.empty else None
+        fs_id_col = get_col(df_fengshen, ["骑手ID"]) if not df_fengshen.empty else None
         fs_bound_set = set()
         if fs_id_col and not df_fengshen.empty:
             valid_fs = df_fengshen[fs_id_col].astype(str).str.strip().str.replace(".0", "", regex=False)
             fs_bound_set = set(valid_fs[(valid_fs != "") & (valid_fs != "nan")])
         
         # 5. df_shangyi matching
-        sy_idcard_col = get_col(df_shangyi, ["身份证", "身份证号", "身份证号码", "分包骑手证件号码", "证件号码"]) if not df_shangyi.empty else None
-        sy_status_col = get_col(df_shangyi, ["状态", "签约状态", "绑定状态", "认证状态"]) if not df_shangyi.empty else None
+        sy_idcard_col = get_col(df_shangyi, ["身份证号"]) if not df_shangyi.empty else None
+        sy_status_col = get_col(df_shangyi, ["状态"]) if not df_shangyi.empty else None
         sy_bound_set = set()
         if sy_idcard_col and sy_status_col and not df_shangyi.empty:
             df_sy_valid = df_shangyi.dropna(subset=[sy_idcard_col, sy_status_col]).copy()
@@ -306,9 +309,9 @@ async def run_salary_bind_gen(source_path, target_path=None, base_path=None, ded
         
         dailing_rid_set = set()
         if not df_dailing.empty:
-            month_col = get_col(df_dailing, ["代领月份", "月份", "代领月"])
-            enable_col = get_col(df_dailing, ["启停用", "状态"])
-            status_col = get_col(df_dailing, ["流程状态", "审批状态", "状态"])
+            month_col = get_col(df_dailing, ["代领月份"])
+            enable_col = get_col(df_dailing, ["启停用"])
+            status_col = get_col(df_dailing, ["流程状态"])
             
             cond1 = df_dailing[month_col].astype(str).str.strip().str.contains(formatted_month_for_filter, regex=False) if month_col else True
             cond2 = df_dailing[enable_col].astype(str).str.strip() == "启用" if enable_col else True
@@ -317,7 +320,7 @@ async def run_salary_bind_gen(source_path, target_path=None, base_path=None, ded
             df_dailing_filtered = df_dailing[cond1 & cond2 & cond3].copy()
             df_dailing = df_dailing_filtered
             
-            dailing_idcard_col = get_col(df_dailing, ["身份证", "身份证号", "身份证号码", "打款人身份证号码", "骑手身份证"])
+            dailing_idcard_col = get_col(df_dailing, ["打款人身份证号码"])
             if dailing_idcard_col:
                 valid_dl = df_dailing[dailing_idcard_col].astype(str).str.strip().str.upper()
                 dailing_rid_set = set(valid_dl[(valid_dl != "") & (valid_dl != "NAN")])
