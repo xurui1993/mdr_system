@@ -169,10 +169,6 @@ export function SalaryBindDashboard({ theme, stats, isRunning, onRun, config, on
  {config && onAction && onRun && (
  <div className="flex items-center gap-4 mb-6 shrink-0 bg-slate-900/60 light:bg-white p-4 rounded-xl border border-slate-700/50 light:border-slate-200 shadow-sm relative overflow-hidden">
  
- <button onClick={() => onAction("open_source_salary_bind")} disabled={isRunning} className={`px-5 h-11 rounded-lg text-[14px] font-bold transition-all shrink-0 border flex items-center gap-2 relative z-10 ${isRunning ? 'bg-slate-800/50 light:bg-slate-100 text-slate-500 border-slate-700/50 light:border-slate-300 cursor-not-allowed' : 'bg-slate-800/80 light:bg-slate-50 hover:bg-slate-700/80 light:hover:bg-slate-100 light:text-slate-700 text-slate-300 border-slate-700/50 light:border-slate-300 shadow-sm'}`}>
- <Folder className="w-4 h-4" /> 选择目录
- </button>
-
  <div className="flex-1 flex flex-col justify-center px-4 relative z-10 h-11">
  {isRunning ? (
  <div className="flex flex-col gap-1.5 w-full animate-in fade-in duration-500 bg-slate-800/40 light:bg-slate-100/60 p-2.5 rounded-lg border border-slate-700/30 light:border-slate-300/30">
@@ -187,10 +183,10 @@ export function SalaryBindDashboard({ theme, stats, isRunning, onRun, config, on
  </div>
  </div>
  ) : (
- <div className="flex items-center justify-center h-full w-full bg-slate-800/30 light:bg-slate-100/50 rounded-lg border border-dashed border-slate-700/50 light:border-slate-300/60">
- <span className="text-[13px] font-medium tracking-wide text-slate-400 light:text-slate-500 flex items-center gap-2 truncate px-4">
- <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${config.salaryBindSourcePath ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]' : 'bg-slate-600 light:bg-slate-400'}`} />
- <span className="truncate">{config.salaryBindSourcePath ? `已选数据源: ${config.salaryBindSourcePath}` : '准备就绪 / 等待选择数据源'}</span>
+ <div className="flex items-center justify-start h-full w-full">
+ <span className="text-[13px] font-medium tracking-wide flex items-center gap-2 truncate text-slate-400 light:text-slate-500 bg-slate-800/20 light:bg-slate-100/40 px-3 py-1.5 rounded-md">
+ <div className={`w-2 h-2 rounded-full shrink-0 ${config.salaryBindSourcePath ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)] animate-pulse' : 'bg-slate-600 light:bg-slate-400'}`} />
+ <span className="truncate">{config.salaryBindSourcePath ? `数据源已就绪: ${config.salaryBindSourcePath.split('/').pop() || config.salaryBindSourcePath}` : '准备就绪 / 等待选择数据源'}</span>
  </span>
  </div>
  )}
@@ -216,6 +212,10 @@ export function SalaryBindDashboard({ theme, stats, isRunning, onRun, config, on
     <Download className="w-4 h-4" /> 导出结果
   </button>
  )}
+
+ <button onClick={() => onAction("open_source_salary_bind")} disabled={isRunning} className={`px-5 h-11 rounded-lg text-[14px] font-bold transition-all shrink-0 border flex items-center gap-2 relative z-10 ${isRunning ? 'bg-slate-800/50 light:bg-slate-100 text-slate-500 border-slate-700/50 light:border-slate-300 cursor-not-allowed' : 'bg-slate-800/80 light:bg-slate-50 hover:bg-slate-700/80 light:hover:bg-slate-100 light:text-slate-700 text-slate-300 border-slate-700/50 light:border-slate-300 shadow-sm'}`}>
+ <Folder className="w-4 h-4" /> 选择目录
+ </button>
 
  <button 
  onClick={onRun} 
@@ -293,15 +293,6 @@ export function SalaryBindDashboard({ theme, stats, isRunning, onRun, config, on
      </div>
    )}
  </div>
- {(!displayStats || !displayStats.overall || displayStats.overall.total_riders === 0) && (
- <div className="flex items-center gap-2 text-[12px] light:text-sky-600 text-sky-400 font-mono tracking-widest bg-sky-500/10 px-3 py-1.5 rounded-lg border light:border-slate-200 border-sky-500/20 shadow-[0_0_10px_rgba(14,165,233,0.1)]">
- <span className="relative flex h-2 w-2">
- <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-sky-400 opacity-75"></span>
- <span className="relative inline-flex rounded-full h-2 w-2 bg-sky-500"></span>
- </span>
- config.xlsx 数据预览
- </div>
- )}
  </div>
  </div>
 

@@ -266,27 +266,12 @@ async def run_salary_bind_gen(source_path, target_path=None, base_path=None, ded
             names = df_i_valid[info_name_col].astype(str).str.strip() if info_name_col else [""] * len(df_i_valid)
             teams = df_i_valid[info_team_col].astype(str).str.strip() if info_team_col else [""] * len(df_i_valid)
             
-            # 用于补充 base 的记录
-            existing_base_rids = set(df_base[rid_col].astype(str).str.strip().str.replace(".0", "", regex=False)) if not df_base.empty and rid_col in df_base.columns else set()
-            new_base_rows = []
-            
             for rid, idc, ph, nm, tm in zip(rids, idcards, phones, names, teams):
                 if rid and rid != "nan":
                     info_mapping[rid] = {
                         "idcard": idc if idc != "nan" else "",
                         "phone": ph if ph != "nan" else ""
                     }
-                    if rid not in existing_base_rids:
-                        existing_base_rids.add(rid)
-                        new_base_rows.append({
-                            rid_col: rid,
-                            team_col: tm if tm != "nan" else "未知团队",
-                            "单量汇总": 0,
-                            name_col: nm if nm != "nan" else "未知姓名"
-                        })
-            
-            if new_base_rows:
-                df_base = pd.concat([df_base, pd.DataFrame(new_base_rows)], ignore_index=True)
         
         # 4. df_fengshen matching
         fs_id_col = get_col(df_fengshen, ["骑手ID", "骑手id", "ID", "id"]) if not df_fengshen.empty else None
