@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Theme, AppConfig } from '../types';
 import { motion } from 'motion/react';
-import { Zap, Folder, Landmark, Navigation, Building, Building2, Castle, Compass, Map as MapIcon, MapPin, Mountain, Tent, Trees, TreePine, Waves, Anchor, Ship, Train, Plane, Car, Bus, Palmtree, Snowflake, Sun, Moon, Cloud, Umbrella, Star, MapPinned, Flag, Rocket } from 'lucide-react';
+import { Zap, Folder, Download, Landmark, Navigation, Building, Building2, Castle, Compass, Map as MapIcon, MapPin, Mountain, Tent, Trees, TreePine, Waves, Anchor, Ship, Train, Plane, Car, Bus, Palmtree, Snowflake, Sun, Moon, Cloud, Umbrella, Star, MapPinned, Flag, Rocket } from 'lucide-react';
 
 interface StationStats {
  station_name: string;
@@ -44,6 +44,9 @@ interface Props {
  config?: AppConfig;
  onAction?: (action: string) => void;
  progress?: number;
+ progressText?: string;
+ lastOutput?: string | null;
+ onDownload?: () => void;
 }
 
 const EMPTY_STATS: SalaryBindStatsData = {
@@ -56,7 +59,7 @@ const getCityZodiac = (index: number) => {
   return zodiacs[index % zodiacs.length];
 };
 
-export function SalaryBindDashboard({ theme, stats, isRunning, onRun, config, onAction, progress }: Props) {
+export function SalaryBindDashboard({ theme, stats, isRunning, onRun, config, onAction, progress, progressText, lastOutput, onDownload }: Props) {
  const [selectedCity, setSelectedCity] = useState<string>('业务城市');
  const [elapsedMs, setElapsedMs] = useState(0);
 
@@ -76,6 +79,42 @@ export function SalaryBindDashboard({ theme, stats, isRunning, onRun, config, on
      clearTimeout(hoverTimeoutRef.current);
    }
  }, []);
+
+ const [historyStats, setHistoryStats] = useState<{month: string, stats: SalaryBindStatsData, mtime: number}[]>([]);
+ const [selectedMonth, setSelectedMonth] = useState<string | null>(null);
+
+ const fetchHistory = useCallback(() => {
+   fetch('/api/salary_bind/stats')
+     .then(res => res.json())
+     .then(data => {
+       if (data.code === 0 && data.data) {
+         setHistoryStats(data.data);
+       }
+     })
+     .catch(console.error);
+ }, []);
+
+ useEffect(() => {
+   fetchHistory();
+ }, [fetchHistory]);
+
+ useEffect(() => {
+   if (!isRunning) {
+     fetchHistory();
+   }
+ }, [isRunning, fetchHistory]);
+ 
+ useEffect(() => {
+   if (historyStats.length > 0 && !selectedMonth) {
+       setSelectedMonth(historyStats[0].month);
+   }
+ }, [historyStats, selectedMonth]);
+
+ useEffect(() => {
+   if (stats && !isRunning) {
+     setSelectedMonth('latest');
+   }
+ }, [stats, isRunning]);
 
  useEffect(() => {
  let animationFrameId: number;
@@ -105,7 +144,10 @@ export function SalaryBindDashboard({ theme, stats, isRunning, onRun, config, on
  return `${minutes}:${seconds}.${centiseconds}`;
  };
 
- const displayStats = stats || EMPTY_STATS;
+ const displayStats = selectedMonth && selectedMonth !== 'latest'
+   ? historyStats.find(h => h.month === selectedMonth)?.stats || EMPTY_STATS
+   : (stats || (historyStats.length > 0 ? historyStats[0].stats : EMPTY_STATS));
+   
  const cityNames = Object.keys(displayStats.cities);
  
  const StatCard = ({ title, value, unit, highlight }: { title: string, value: string | number, unit?: string, highlight?: boolean }) => (
@@ -127,31 +169,60 @@ export function SalaryBindDashboard({ theme, stats, isRunning, onRun, config, on
  {config && onAction && onRun && (
  <div className="flex items-center gap-4 mb-6 shrink-0 bg-slate-900/60 light:bg-white p-4 rounded-xl border border-slate-700/50 light:border-slate-200 shadow-sm relative overflow-hidden">
  
- 
- <div className="flex-1 flex items-center bg-slate-950/60 light:bg-slate-50 rounded-lg border border-slate-700/50 light:border-slate-200 h-10 overflow-hidden px-4 relative z-10 transition-colors">
- <Folder className="w-5 h-5 light:text-sky-600 text-sky-400 mr-3 shrink-0" />
- <input type="text" readOnly placeholder="未载入数据源，请选择目标文件夹" value={config.salaryBindSourcePath || ''} className="flex-1 bg-transparent border-none outline-none font-mono text-[13px] text-sky-100 light:text-slate-800 tracking-wide truncate placeholder-sky-700/50 light:placeholder-slate-400" />
- <button onClick={() => onAction("open_source_salary_bind")} className="px-5 py-1.5 bg-sky-500/20 light:bg-white hover:bg-sky-500/40 light:hover:bg-slate-50 rounded-lg text-[13px] font-bold light:text-slate-700 text-sky-300 hover:light:text-slate-900 text-white transition-all shrink-0 ml-3 border border-sky-500/40 light:border-slate-200 shadow-[0_0_10px_rgba(14,165,233,0.2)] light:shadow-sm">
- 选择目录
+ <button onClick={() => onAction("open_source_salary_bind")} disabled={isRunning} className={`px-5 h-11 rounded-lg text-[14px] font-bold transition-all shrink-0 border flex items-center gap-2 relative z-10 ${isRunning ? 'bg-slate-800/50 light:bg-slate-100 text-slate-500 border-slate-700/50 light:border-slate-300 cursor-not-allowed' : 'bg-slate-800/80 light:bg-slate-50 hover:bg-slate-700/80 light:hover:bg-slate-100 light:text-slate-700 text-slate-300 border-slate-700/50 light:border-slate-300 shadow-sm'}`}>
+ <Folder className="w-4 h-4" /> 选择目录
  </button>
+
+ <div className="flex-1 flex flex-col justify-center px-4 relative z-10 h-11">
+ {isRunning ? (
+ <div className="flex flex-col gap-1.5 w-full animate-in fade-in duration-500 bg-slate-800/40 light:bg-slate-100/60 p-2.5 rounded-lg border border-slate-700/30 light:border-slate-300/30">
+ <div className="flex justify-between items-end text-[12px] font-bold text-sky-400 light:text-sky-600 tracking-wider">
+ <span className="truncate pr-4 opacity-80">{progressText || '正在处理中...'}</span>
+ <span className="font-mono text-[13px]">{progress || 0}%</span>
+ </div>
+ <div className="h-2 w-full bg-slate-950/60 light:bg-slate-200 rounded-full overflow-hidden border border-slate-800/50 light:border-slate-300">
+ <div className="h-full bg-gradient-to-r from-sky-400 via-indigo-500 to-purple-500 transition-all duration-300 relative" style={{ width: `${progress || 0}%` }}>
+ <div className="absolute top-0 right-0 bottom-0 left-0 bg-[linear-gradient(45deg,transparent_25%,rgba(255,255,255,0.2)_50%,transparent_75%,transparent_100%)] bg-[length:20px_20px] animate-[shimmer_1s_linear_infinite]" />
+ </div>
+ </div>
+ </div>
+ ) : (
+ <div className="flex items-center justify-center h-full w-full bg-slate-800/30 light:bg-slate-100/50 rounded-lg border border-dashed border-slate-700/50 light:border-slate-300/60">
+ <span className="text-[13px] font-medium tracking-wide text-slate-400 light:text-slate-500 flex items-center gap-2 truncate px-4">
+ <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${config.salaryBindSourcePath ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]' : 'bg-slate-600 light:bg-slate-400'}`} />
+ <span className="truncate">{config.salaryBindSourcePath ? `已选数据源: ${config.salaryBindSourcePath}` : '准备就绪 / 等待选择数据源'}</span>
+ </span>
+ </div>
+ )}
  </div>
  
- <div className="flex items-center gap-4 shrink-0 h-10 px-5 bg-slate-950/60 light:bg-slate-50 rounded-lg border border-slate-700/50 light:border-slate-200 shadow-sm relative z-10">
+ { (isRunning || elapsedMs > 0) && (
+ <div className="flex items-center gap-4 shrink-0 h-11 px-6 bg-slate-950/60 light:bg-slate-50 rounded-lg border border-slate-700/50 light:border-slate-200 shadow-sm relative z-10">
  <span className="relative flex h-2.5 w-2.5">
  <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${isRunning ? 'bg-purple-400' : 'bg-emerald-400'}`}></span>
  <span className={`relative inline-flex rounded-full h-2.5 w-2.5 ${isRunning ? 'bg-purple-500' : 'bg-emerald-500'}`}></span>
  </span>
- <span className="text-slate-200 light:text-slate-800 font-mono text-[15px] font-bold tracking-widest min-w-[75px] text-center">
+ <span className="text-slate-200 light:text-slate-800 font-mono text-[16px] font-bold tracking-widest min-w-[75px] text-center">
  {formatStopwatch(elapsedMs)}
  </span>
  </div>
+ )}
+
+ {lastOutput && !isRunning && (
+  <button 
+    onClick={onDownload}
+    className="h-11 px-6 rounded-xl font-bold tracking-wider flex items-center justify-center gap-2 transition-all shrink-0 border relative overflow-hidden z-10 bg-emerald-500/10 hover:bg-emerald-500/20 border-emerald-500/30 text-emerald-400 light:bg-emerald-50 light:hover:bg-emerald-100 light:text-emerald-600 shadow-sm"
+  >
+    <Download className="w-4 h-4" /> 导出结果
+  </button>
+ )}
 
  <button 
  onClick={onRun} 
  disabled={isRunning}
  className={`h-11 px-8 rounded-xl font-bold tracking-widest flex items-center justify-center gap-3 transition-all shrink-0 border relative overflow-hidden z-10 ${
  isRunning 
- ? 'bg-gradient-to-r from-sky-500/10 to-purple-500/10 light:text-slate-500 text-sky-400 border-sky-500/30 light:border-slate-200 cursor-wait' 
+ ? 'bg-slate-800/50 light:bg-slate-100 text-slate-500 border-slate-700/50 light:border-slate-300 cursor-not-allowed' 
  : 'bg-gradient-to-r from-sky-600 to-sky-500 light:from-white light:to-white light:text-slate-700 text-white border-sky-400 light:border-slate-200 hover:from-sky-500 hover:to-sky-400 light:hover:from-slate-50 light:hover:to-slate-50 shadow-[0_0_20px_rgba(14,165,233,0.4)] light:shadow-sm'
  }`}
  >
@@ -169,8 +240,8 @@ export function SalaryBindDashboard({ theme, stats, isRunning, onRun, config, on
  )}
 
  {/* Header Section */}
- <div className="flex items-center justify-between mb-6 shrink-0 relative">
- <div className="flex gap-2 p-1.5 rounded-xl bg-slate-900/60 border light:border-slate-200 border-white/5 max-w-full overflow-x-auto no-scrollbar shadow-inner after:content-[''] after:w-2 after:block after:shrink-0">
+ <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-6 shrink-0 relative">
+ <div className="flex-1 flex gap-2 p-1.5 rounded-xl bg-slate-900/60 border light:border-slate-200 border-white/5 w-0 overflow-x-auto no-scrollbar shadow-inner after:content-[''] after:w-2 after:block after:shrink-0">
  <button
   onMouseEnter={() => handleMouseEnter('业务城市')}
  onMouseLeave={handleMouseLeave}
@@ -197,13 +268,32 @@ export function SalaryBindDashboard({ theme, stats, isRunning, onRun, config, on
  </button>
  ))}
  </div>
- <div className="flex items-center gap-3">
- {config?.issueCycle && (
- <div className="flex items-center gap-2 text-[12px] light:text-indigo-600 text-indigo-300 font-bold tracking-widest bg-indigo-500/10 px-4 py-1.5 rounded-lg border light:border-indigo-200 border-indigo-500/30 shadow-[0_0_10px_rgba(99,102,241,0.15)]">
- 绑定月份: {config.issueCycle}
+ <div className="flex items-center gap-3 shrink-0">
+ <div className="flex items-center gap-2 text-[12px] light:text-indigo-600 text-indigo-300 font-bold tracking-widest bg-indigo-500/10 px-4 py-1.5 rounded-lg border light:border-indigo-200 border-indigo-500/30 shadow-[0_0_10px_rgba(99,102,241,0.15)] relative group cursor-pointer">
+   <span>绑定月份: {selectedMonth === 'latest' ? '当前 (最新)' : (selectedMonth || (config?.issueCycle || '无数据'))}</span>
+   {historyStats.length > 0 && (
+     <div className="absolute top-full mt-2 right-0 hidden group-hover:flex flex-col bg-slate-800 light:bg-white border border-slate-700 light:border-slate-200 rounded-lg shadow-xl overflow-hidden z-50 min-w-[120px]">
+       {stats && (
+         <div 
+           className={`px-4 py-2 hover:bg-slate-700 light:hover:bg-slate-100 transition-colors ${selectedMonth === 'latest' ? 'text-indigo-400 light:text-indigo-600 bg-slate-700/50 light:bg-slate-50' : ''}`}
+           onClick={() => setSelectedMonth('latest')}
+         >
+           当前 (最新)
+         </div>
+       )}
+       {historyStats.map(h => (
+         <div 
+           key={h.month} 
+           className={`px-4 py-2 hover:bg-slate-700 light:hover:bg-slate-100 transition-colors ${selectedMonth === h.month ? 'text-indigo-400 light:text-indigo-600 bg-slate-700/50 light:bg-slate-50' : ''}`}
+           onClick={() => setSelectedMonth(h.month)}
+         >
+           {h.month}
+         </div>
+       ))}
+     </div>
+   )}
  </div>
- )}
- {(!stats) && (
+ {(!displayStats || !displayStats.overall || displayStats.overall.total_riders === 0) && (
  <div className="flex items-center gap-2 text-[12px] light:text-sky-600 text-sky-400 font-mono tracking-widest bg-sky-500/10 px-3 py-1.5 rounded-lg border light:border-slate-200 border-sky-500/20 shadow-[0_0_10px_rgba(14,165,233,0.1)]">
  <span className="relative flex h-2 w-2">
  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-sky-400 opacity-75"></span>

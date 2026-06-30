@@ -56,3 +56,10 @@ export interface TaskHistoryRecord {
   timestamp: string;
   status: 'SUCCESS' | 'FAILED';
 }
+
+export interface UserProfile {
+  name: string;
+  department: string;
+  avatar: string;
+  status?: string;
+}

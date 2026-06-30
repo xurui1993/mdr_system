@@ -326,6 +326,79 @@ def get_system_stats():
     except Exception as e:
         return {"success": False, "error": str(e)}
 
+@app.get("/api/salary_bind/stats")
+def get_salary_bind_stats():
+    # 处理逻辑：获取骑手支付绑定任务的所有历史 JSON 统计数据，供前端按月份筛选
+    base_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "outputs", "骑手支付绑定"))
+    if not os.path.exists(base_dir):
+        return {"code": 0, "data": []}
+    
+    results = []
+    try:
+        for month_folder in os.listdir(base_dir):
+            folder_path = os.path.join(base_dir, month_folder)
+            if os.path.isdir(folder_path):
+                stats_file = os.path.join(folder_path, "stats.json")
+                if os.path.exists(stats_file):
+                    try:
+                        import json
+                        with open(stats_file, 'r', encoding='utf-8') as f:
+                            stats = json.load(f)
+                        mtime = os.path.getmtime(stats_file)
+                        results.append({
+                            "month": month_folder,
+                            "stats": stats,
+                            "mtime": mtime
+                        })
+                    except Exception:
+                        pass
+        # 按月份名称降序排序，最新的在前面
+        results.sort(key=lambda x: str(x["month"]), reverse=True)
+        return {"code": 0, "data": results}
+    except Exception as e:
+        return {"code": -1, "message": str(e), "data": []}
+
+@app.post("/api/check_cookie")
+async def check_cookie(request: Request):
+    try:
+        data = await request.json()
+        cookie_str = data.get("cookie", "")
+        if not cookie_str:
+            return {"valid": False, "msg": "未提供 Cookie"}
+        
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
+            'Accept': 'application/json, text/plain, */*',
+            'Content-Type': 'application/json',
+            'Cookie': cookie_str
+        }
+        
+        import requests
+        # 尝试通过随便一个轻量接口验证, 或者获取列表，这里用 switchAgency 测试能否成功响应
+        # 测试城市 深圳 31030116
+        res = requests.post(
+            "https://httpizza.ele.me/lpd.meepo.session/aeolus/switchAgency",
+            json={"toAgencyId": 31030116},
+            headers=headers,
+            timeout=5
+        )
+        
+        if res.status_code == 401 or res.status_code == 403:
+             return {"valid": False, "msg": "Cookie 已失效或无权限 (401/403)"}
+             
+        res.raise_for_status()
+        resp_data = res.json()
+        
+        # 通常 ele.me 失败的话会在返回体里带 error 或 name = BIZ_ERROR
+        if resp_data.get('error') or resp_data.get('name') == 'BIZ_ERROR' or resp_data.get('code') != 200 and 'code' in resp_data:
+            # 有时可能单纯是因为城市ID不对，但至少能看出来有没有鉴权通过
+            if "登录" in str(resp_data) or "失效" in str(resp_data):
+                return {"valid": False, "msg": f"验证失败: {resp_data.get('message', 'Cookie已失效')}"}
+        
+        return {"valid": True, "msg": "Cookie 连接有效！准入凭证正常。"}
+    except Exception as e:
+        return {"valid": False, "msg": f"验证失败，请检查网络或Cookie: {str(e)}"}
+
 @app.post("/api/run")
 async def run_calculation(config: ConfigRequest, request: Request):
     """
@@ -439,3 +512,20 @@ async def action_file(request: Request):
     except Exception as e:
         return {"success": False, "error": str(e)}
     return {"success": False, "error": "Unknown action"}
+
+from fastapi.responses import FileResponse
+
+@app.get("/api/download/template")
+async def download_template():
+    import sys
+    if getattr(sys, 'frozen', False):
+        exe_dir = os.path.dirname(sys.executable)
+        project_root = os.path.dirname(exe_dir) if os.path.basename(exe_dir).lower() in ['dist', 'build'] else exe_dir
+    else:
+        current_file_dir = os.path.dirname(os.path.abspath(__file__))
+        project_root = os.path.dirname(current_file_dir) if os.path.basename(current_file_dir) == 'backend' else current_file_dir
+
+    template_path = os.path.abspath(os.path.join(project_root, "兼职-template.xlsx"))
+    if not os.path.exists(template_path):
+        return {"success": False, "error": "Template file not found"}
+    return FileResponse(template_path, filename="兼职-template.xlsx", media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")

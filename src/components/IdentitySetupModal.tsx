@@ -1,26 +1,26 @@
 import React, { useState } from 'react';
-import { User, Monitor, Network } from 'lucide-react';
+import { User, Monitor, Network, Building2 } from 'lucide-react';
 import { Theme } from '../types';
 
 interface IdentitySetupModalProps {
  theme: Theme;
- onComplete: (userName: string, computerName: string) => void;
+ onComplete: (userName: string, department: string) => void;
 }
 
 export function IdentitySetupModal({ theme, onComplete }: IdentitySetupModalProps) {
  const [userName, setUserName] = useState(() => localStorage.getItem("app_identity_user") || "");
- const [computerName, setComputerName] = useState(() => localStorage.getItem("app_identity_computer") || "");
+ const [department, setDepartment] = useState(() => localStorage.getItem("app_identity_department") || "");
  const [error, setError] = useState("");
 
  const handleSubmit = (e: React.FormEvent) => {
  e.preventDefault();
- if (!userName.trim() || !computerName.trim()) {
+ if (!userName.trim() || !department.trim()) {
  setError("请填写完整信息，以便服务器归档");
  return;
  }
  localStorage.setItem("app_identity_user", userName.trim());
- localStorage.setItem("app_identity_computer", computerName.trim());
- onComplete(userName.trim(), computerName.trim());
+ localStorage.setItem("app_identity_department", department.trim());
+ onComplete(userName.trim(), department.trim());
  };
 
  return (
@@ -39,7 +39,7 @@ export function IdentitySetupModal({ theme, onComplete }: IdentitySetupModalProp
  <form onSubmit={handleSubmit} className="space-y-5">
  <div className="space-y-2">
  <label className="text-sm font-medium light:text-slate-700 text-slate-400 flex items-center gap-2">
- <User className="w-4 h-4 text-sky-500/70" /> 操作人姓名
+ <User className="w-4 h-4 text-sky-500/70" /> 姓名
  </label>
  <input
  type="text"
@@ -52,13 +52,13 @@ export function IdentitySetupModal({ theme, onComplete }: IdentitySetupModalProp
 
  <div className="space-y-2">
  <label className="text-sm font-medium light:text-slate-700 text-slate-400 flex items-center gap-2">
- <Monitor className="w-4 h-4 text-sky-500/70" /> 物理机名称
+ <Building2 className="w-4 h-4 text-sky-500/70" /> 部门
  </label>
  <input
  type="text"
- value={computerName}
- onChange={(e) => setComputerName(e.target.value)}
- placeholder="例如：行政部1号机"
+ value={department}
+ onChange={(e) => setDepartment(e.target.value)}
+ placeholder="例如：行政部"
  className="w-full bg-slate-900/50 border light:border-slate-200 border-sky-500/20 rounded-xl px-4 py-3 text-sky-100 placeholder:text-slate-600 focus:outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500/50 transition-all font-medium"
  />
  </div>
@@ -81,3 +81,4 @@ export function IdentitySetupModal({ theme, onComplete }: IdentitySetupModalProp
  </div>
  );
 }
+

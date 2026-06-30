@@ -21,6 +21,11 @@
       ]
     },
     "allowImportingTsExtensions": true,
-    "noEmit": true
-  }
+    "noEmit": true,
+    "baseUrl": "."
+  },
+  "include": [
+    "src/**/*",
+    "server.ts"
+  ]
 }

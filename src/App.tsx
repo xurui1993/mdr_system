@@ -2,23 +2,24 @@ import React, { useState, useEffect, useRef } from "react";
 import { io } from "socket.io-client";
 import JSZip from "jszip";
 import { THEMES } from "./constants";
-import { LogEntry, AppConfig, TaskHistoryRecord } from "./types";
+import { LogEntry, AppConfig, TaskHistoryRecord, UserProfile } from "./types";
 import { Header } from "./components/Header";
 import { Sidebar } from "./components/Sidebar";
 import { ControlPanel } from "./components/ControlPanel";
 import { ActionPanel } from "./components/ActionPanel";
-import { IssueOrderControlPanel } from "./components/IssueOrderControlPanel";
-import { IssueOrderActionPanel } from "./components/IssueOrderActionPanel";
+import { IssueOrderDashboard } from "./components/IssueOrderDashboard";
 import { TerminalPanel } from "./components/TerminalPanel";
 import { TaskTimer } from "./components/TaskTimer";
 import { RightPanel } from "./components/RightPanel";
-import { FolderOpen, Filter, AlertCircle } from "lucide-react";
+import { FolderOpen, Filter, AlertCircle, Download } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { SalaryBindDashboard, SalaryBindStatsData } from "./components/SalaryBindDashboard";
 import { DashboardPanel } from "./components/DashboardPanel";
 import { DeductionConfigPanel } from "./components/DeductionConfig";
+import { FormulaConfigPanel } from "./components/FormulaConfigPanel";
 import { TaskMonitor } from "./components/TaskMonitor";
 import { ChatPanel } from "./components/ChatPanel";
+import * as XLSX from "xlsx";
 import { getWorkspaceId } from "./utils";
 import confetti from "canvas-confetti";
 
@@ -101,6 +102,13 @@ const getLocalToday = () => {
   return `${y}-${m}-${day}`;
 };
 
+const getLocalMonthStart = () => {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  return `${y}-${m}-01`;
+};
+
 const showDesktopNotification = (title: string, body: string) => {
   if (!("Notification" in window)) {
     return;
@@ -119,14 +127,17 @@ const showDesktopNotification = (title: string, body: string) => {
 
 import { IdentitySetupModal } from "./components/IdentitySetupModal";
 
+import { ProfileEditModal } from "./components/ProfileEditModal";
+
 export default function App() {
   const theme = THEMES[0];
 
   const [appTheme, setAppTheme] = useState<'dark' | 'light'>(() => {
-    return (localStorage.getItem('app_theme') as 'dark' | 'light') || 'dark';
+    return (localStorage.getItem('app_theme') as 'dark' | 'light') || 'light';
   });
 
   useEffect(() => {
+    document.title = "薪酬核算中心";
     if (appTheme === 'light') {
        document.documentElement.setAttribute('data-theme', 'light');
        document.documentElement.classList.remove('dark');
@@ -137,8 +148,53 @@ export default function App() {
     localStorage.setItem('app_theme', appTheme);
   }, [appTheme]);
 
+  const [userProfile, setUserProfile] = useState<UserProfile>(() => {
+    const defaultAvatars = ["🐏", "🐂", "👯", "🦀", "🦁", "🧚", "⚖️", "🦂", "🏹", "🐐", "🏺", "🐟"];
+    const randomAvatar = defaultAvatars[Math.floor(Math.random() * defaultAvatars.length)];
+    let savedAvatar = localStorage.getItem("app_identity_avatar");
+    if (!savedAvatar || savedAvatar === "👨‍🚀") {
+      savedAvatar = randomAvatar;
+      localStorage.setItem("app_identity_avatar", savedAvatar);
+    }
+    return {
+      name: localStorage.getItem("app_identity_user") || "",
+      department: localStorage.getItem("app_identity_department") || "",
+      avatar: savedAvatar,
+      status: localStorage.getItem("app_identity_status") || "在线",
+    };
+  });
+  const [showProfileEdit, setShowProfileEdit] = useState(false);
+
+  const handleSaveProfile = (newProfile: UserProfile) => {
+    setUserProfile(newProfile);
+    localStorage.setItem("app_identity_user", newProfile.name);
+    localStorage.setItem("app_identity_department", newProfile.department);
+    localStorage.setItem("app_identity_avatar", newProfile.avatar);
+    if (newProfile.status) {
+      localStorage.setItem("app_identity_status", newProfile.status);
+    }
+    
+    // Also sync chat avatar logic if needed
+    localStorage.setItem("chat_username", newProfile.name);
+
+    setShowProfileEdit(false);
+  };
+
+  useEffect(() => {
+    const handleStatusUpdate = (e: any) => {
+      const newStatus = e.detail;
+      setUserProfile((prev: any) => {
+        const newProfile = { ...prev, status: newStatus };
+        localStorage.setItem("app_identity_status", newStatus);
+        return newProfile;
+      });
+    };
+    window.addEventListener("app:updateStatus", handleStatusUpdate);
+    return () => window.removeEventListener("app:updateStatus", handleStatusUpdate);
+  }, []);
+
   const [showIdentitySetup, setShowIdentitySetup] = useState(() => {
-    return !localStorage.getItem("app_identity_user") || !localStorage.getItem("app_identity_computer");
+    return !localStorage.getItem("app_identity_user") || !localStorage.getItem("app_identity_department");
   });
 
   const [workspaceId, setWorkspaceId] = useState(() => {
@@ -153,25 +209,24 @@ export default function App() {
     return wid;
   });
 
-  const handleIdentityComplete = async (userName: string, computerName: string) => {
+  const handleIdentityComplete = async (userName: string, department: string) => {
     try {
-      const res = await fetch("/api/sys-info");
-      const data = await res.json();
-      const ip = (data.ip || "").replace(/[^0-9\.]/g, '_');
-      
-      const newWid = `${userName}_${computerName}_${ip}`;
+      setUserProfile((prev) => ({ ...prev, name: userName, department }));
+      const newWid = userName;
       setWorkspaceId(newWid);
       localStorage.setItem("app_workspace_id", newWid);
       setShowIdentitySetup(false);
       window.location.reload(); // Reload to ensure all backend directories are created under new wid
     } catch(e) {
-       const newWid = `${userName}_${computerName}_未知IP`;
+       const newWid = userName;
+       setUserProfile((prev) => ({ ...prev, name: userName, department }));
        setWorkspaceId(newWid);
        localStorage.setItem("app_workspace_id", newWid);
        setShowIdentitySetup(false);
        window.location.reload();
     }
   };
+
 
   const fetchWithAuth = (url: string, options: RequestInit = {}) => {
     const headers = new Headers(options.headers || {});
@@ -180,8 +235,19 @@ export default function App() {
   };
 
   const [activeMenu, setActiveMenu] = useState("dashboard");
+  const activeMenuRef = useRef(activeMenu);
+  useEffect(() => {
+    activeMenuRef.current = activeMenu;
+  }, [activeMenu]);
+
   const [hasUnreadChat, setHasUnreadChat] = useState(false);
   const [runningTask, setRunningTask] = useState<string | null>(null);
+  const [lastOutputFolder, setLastOutputFolder] = useState<string | null>(() => {
+    return localStorage.getItem("lastOutputFolder") || null;
+  });
+  const [lastSalaryBindOutput, setLastSalaryBindOutput] = useState<string | null>(() => {
+    return localStorage.getItem("lastSalaryBindOutput") || null;
+  });
 
   useEffect(() => {
     const socket = io(window.location.origin, {
@@ -211,8 +277,7 @@ export default function App() {
     });
 
     socket.on("message", (msg: any) => {
-      // If we receive a message and we are NOT looking at the chat menu, light up the notification
-      if (activeMenu !== "chat") {
+      if (activeMenuRef.current !== "chat") {
         setHasUnreadChat(true);
       }
     });
@@ -220,7 +285,7 @@ export default function App() {
     return () => {
       socket.disconnect();
     };
-  }, [workspaceId, activeMenu]);
+  }, [workspaceId]);
 
   useEffect(() => {
     if (activeMenu === "chat") {
@@ -309,14 +374,14 @@ export default function App() {
 
   const [appConfig, setAppConfig] = useState<AppConfig>(() => {
     const defaultState: AppConfig = {
-      city: "深圳",
+      city: "",
       issueCycle: "今天",
       sourcePath: "../uploads",
       basePath: "",
       cities: [],
       issueCycles: ["今天", "本周", "上半月", "下半月", "当月"],
-      issueSelectedCities: ["深圳"],
-      startDate: getLocalToday(),
+      issueSelectedCities: [],
+      startDate: getLocalMonthStart(),
       endDate: getLocalToday(),
       enableInterceptor: false,
       enableCrossStationMerge: false,
@@ -334,6 +399,38 @@ export default function App() {
     }
     return defaultState;
   });
+
+  useEffect(() => {
+    // Load cities from backend which reads config.xlsx
+    const configPath = appConfig.sourcePath && appConfig.sourcePath !== "./data" && appConfig.sourcePath !== "../uploads" ? appConfig.sourcePath + "/config.xlsx" : undefined;
+    
+    fetchWithAuth("/api/config_excel_data", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ configPath })
+    })
+    .then(res => {
+      const ct = res.headers.get("content-type");
+      if (!res.ok || !ct || !ct.includes("application/json")) throw new Error("Invalid JSON response");
+      return res.json();
+    })
+    .then(data => {
+      if (data.success && data.data && data.data.cities) {
+        const newCities = Object.keys(data.data.cities);
+        if (newCities.length > 0) {
+          setAppConfig(prev => {
+            if (JSON.stringify(prev.cities) !== JSON.stringify(newCities)) {
+              return { ...prev, cities: newCities };
+            }
+            return prev;
+          });
+        }
+      }
+    })
+    .catch(err => {
+      console.error("Failed to load cities from config.xlsx API", err);
+    });
+  }, [appConfig.sourcePath]);
 
   useEffect(() => {
     if (activeMenu === "salary_bind") {
@@ -382,6 +479,9 @@ export default function App() {
             if (data && Object.keys(data).length > 0 && !data.error) {
               setAppConfig((prev) => {
                 let newConfig = { ...prev, ...data };
+                if (prev.cities && prev.cities.length > 0) {
+                  newConfig.cities = prev.cities;
+                }
                 if (
                   !newConfig.sourcePath ||
                   newConfig.sourcePath === "./data" ||
@@ -686,6 +786,80 @@ export default function App() {
     }
   };
 
+  const handleDownloadSalaryTable = async () => {
+    if (!lastOutputFolder) {
+      showToast("未检测到已生成的薪资表，请先执行计算！", "warn");
+      return;
+    }
+
+    try {
+      showToast("正在检索最新生成的薪资表...", "info");
+      const resp = await fetchWithAuth("/api/files", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ path: lastOutputFolder }),
+      });
+      const data = await resp.json();
+      const files = data.files || [];
+
+      // Find primary salary sheet ending with .xlsx and not being the special unbound/no-price lists
+      const mainFile = files.find((f: any) => 
+        !f.is_dir && 
+        f.name.endsWith(".xlsx") && 
+        !f.name.includes("无单价") && 
+        !f.name.includes("未绑名单")
+      ) || files.find((f: any) => !f.is_dir && f.name.endsWith(".xlsx"));
+
+      const wid = getWorkspaceId();
+      if (mainFile) {
+        showToast(`正在下载薪资表: ${mainFile.name}`, "success");
+        window.open(`/api/download?path=${encodeURIComponent(mainFile.path)}&workspace_id=${encodeURIComponent(wid)}`, "_blank");
+      } else {
+        showToast("未找到单独的 Excel 文件，正打包整个文件夹下载...", "info");
+        window.open(`/api/download?path=${encodeURIComponent(lastOutputFolder)}&workspace_id=${encodeURIComponent(wid)}`, "_blank");
+      }
+    } catch (err) {
+      const wid = getWorkspaceId();
+      window.open(`/api/download?path=${encodeURIComponent(lastOutputFolder)}&workspace_id=${encodeURIComponent(wid)}`, "_blank");
+    }
+  };
+
+  const handleDownloadSalaryBindTable = async () => {
+    if (!lastSalaryBindOutput) {
+      showToast("未检测到生成的骑手支付绑定表，请先执行计算！", "warn");
+      return;
+    }
+
+    try {
+      showToast("正在检索生成的绑定表...", "info");
+      const resp = await fetchWithAuth("/api/files", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ path: lastSalaryBindOutput }),
+      });
+      const data = await resp.json();
+      const files = data.files || [];
+
+      // Find the final bound sheet
+      const mainFile = files.find((f: any) => 
+        !f.is_dir && 
+        f.name.endsWith(".xlsx")
+      );
+
+      const wid = getWorkspaceId();
+      if (mainFile) {
+        showToast(`正在下载: ${mainFile.name}`, "success");
+        window.open(`/api/download?path=${encodeURIComponent(mainFile.path)}&workspace_id=${encodeURIComponent(wid)}`, "_blank");
+      } else {
+        showToast("未找到单独的 Excel 文件，正打包整个文件夹下载...", "info");
+        window.open(`/api/download?path=${encodeURIComponent(lastSalaryBindOutput)}&workspace_id=${encodeURIComponent(wid)}`, "_blank");
+      }
+    } catch (err) {
+      const wid = getWorkspaceId();
+      window.open(`/api/download?path=${encodeURIComponent(lastSalaryBindOutput)}&workspace_id=${encodeURIComponent(wid)}`, "_blank");
+    }
+  };
+
   const handleAction = async (action: string, overrides?: Partial<AppConfig>) => {
     const isParallelAction = [
       "download_config_template",
@@ -875,42 +1049,40 @@ export default function App() {
     } else if (action === "check_cookie") {
       setLogs([
         {
-          text: `>>> 🔍 正在进行本地会话令牌 (Cookie) Hash 校验与鉴权...`,
+          text: `>>> 🔍 正在进行本地会话令牌 (Cookie) 校验与请求鉴权...`,
           level: "INFO",
         },
       ]);
-      showToast("正在校验 Cookie", "info");
-      setTimeout(() => {
-        if (!appConfig.cookie) {
+      showToast("正在校验 Cookie...", "info");
+      
+      try {
+        const resp = await fetchWithAuth("/api/check_cookie", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ cookie: currentConfig.cookie }),
+        });
+        const data = await resp.json();
+        if (data.valid) {
           setLogs((prev) => [
             ...prev,
-            {
-              text: `>>> ❌ 未提供 Cookie，请先输入有效的 Cookie = ...`,
-              level: "ERROR",
-            },
-          ]);
-          showToast("未提供 Cookie", "error");
-        } else if (appConfig.cookie.length > 20) {
-          setLogs((prev) => [
-            ...prev,
-            {
-              text: `>>> ✅ Cookie连接有效！准入凭证正常。(系统演示)`,
-              level: "SUCCESS",
-            },
+            { text: `>>> ✅ ${data.msg}`, level: "SUCCESS" },
           ]);
           showToast("Cookie连接有效", "success");
         } else {
           setLogs((prev) => [
             ...prev,
-            {
-              text: `>>> ⚠️ Cookie 格式似乎不正确，或是已过期失效，请重新提取。`,
-              level: "WARN",
-            },
+            { text: `>>> ❌ ${data.msg}`, level: "ERROR" },
           ]);
-          showToast("Cookie 可能失效", "warn");
+          showToast("Cookie 无效或已失效", "error");
         }
-        finishAction();
-      }, 1500);
+      } catch (err) {
+        setLogs((prev) => [
+          ...prev,
+          { text: `>>> ⚠️ 校验请求失败: ${String(err)}`, level: "WARN" },
+        ]);
+        showToast("校验失败, 网络异常", "error");
+      }
+      finishAction();
       return;
     } else if (action === "add_task_root") {
       try {
@@ -1133,13 +1305,15 @@ export default function App() {
 
       const reader = response.body.getReader();
       const decoder = new TextDecoder("utf-8");
+      let buffer = "";
 
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
 
-        const chunk = decoder.decode(value, { stream: true });
-        const lines = chunk.split("\n");
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
 
         for (const line of lines) {
           if (line.startsWith("data: ")) {
@@ -1178,7 +1352,7 @@ export default function App() {
                 }
                 
                 if (action === "salary_bind" && data.stats) {
-                  // setSalaryBindStats(data.stats); // 暂时不关联启动任务生成的数据
+                  setSalaryBindStats(data.stats);
                 }
 
                 if (data.status === "success") {
@@ -1190,6 +1364,12 @@ export default function App() {
                     zIndex: 9999
                   });
                   showDesktopNotification("任务执行完毕", "该次核算已圆满完成！");
+                  
+                  if (data.out_file && action === "salary_bind") {
+                    setLastSalaryBindOutput(data.out_file);
+                    localStorage.setItem("lastSalaryBindOutput", data.out_file);
+                    appendLog(`>>> 📦 生成的工作薄已保存至: ${data.out_file}，请点击【导出列表】查看下载`, "SUCCESS", action);
+                  }
                 } else {
                   appendLog(
                     `[引擎断开] ${data.result_msg || "发生未知错误"}`,
@@ -1240,6 +1420,13 @@ export default function App() {
       if (saved) deductionRules = JSON.parse(saved);
     } catch(e) {}
     let effectiveConfig = { ...appConfig, deductionRules, ...overrides };
+
+    if (targetAction === "issue_orders" && (!effectiveConfig.issueSelectedCities || effectiveConfig.issueSelectedCities.length === 0)) {
+      showToast("请先在UI界面中选取业务城市！", "warn");
+      appendLog(`[ERROR] 未选择业务城市，拒绝执行问题单生成！`, "ERROR", targetAction);
+      setRunningTask(null);
+      return;
+    }
 
     // Check if sourcePath is invalid or placeholder
     if (
@@ -1338,13 +1525,15 @@ export default function App() {
 
       const reader = response.body.getReader();
       const decoder = new TextDecoder("utf-8");
+      let buffer = "";
 
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
 
-        const chunk = decoder.decode(value, { stream: true });
-        const lines = chunk.split("\n");
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
 
         for (const line of lines) {
           if (line.startsWith("data: ")) {
@@ -1387,7 +1576,7 @@ export default function App() {
                   core: "兼职薪资核算",
                   issue_orders: "问题单生成",
                   salary_bind: "发薪工具绑定",
-                  chat: "智能控制助手",
+                  chat: "带薪摸鱼官",
                   monitor: "任务监控",
                 };
                 const taskName = MENU_LABELS[activeMenu] || activeMenu;
@@ -1405,6 +1594,9 @@ export default function App() {
                   setProgress(100, targetAction);
                   if (data.stats) {
                     setTaskStatsMap(prev => ({ ...prev, [targetAction]: data.stats }));
+                    if (targetAction === "salary_bind") {
+                      setSalaryBindStats(data.stats);
+                    }
                   }
                   appendLog(`>>> 🎉 任务完成！`, "SUCCESS", targetAction);
                   confetti({
@@ -1415,6 +1607,13 @@ export default function App() {
                   });
                   showDesktopNotification("任务执行完毕", "该次核算已圆满完成！");
                   if (data.out_file) {
+                    if (targetAction === "core") {
+                      setLastOutputFolder(data.out_file);
+                      localStorage.setItem("lastOutputFolder", data.out_file);
+                    } else if (targetAction === "salary_bind") {
+                      setLastSalaryBindOutput(data.out_file);
+                      localStorage.setItem("lastSalaryBindOutput", data.out_file);
+                    }
                     appendLog(`>>> 📦 生成的工作薄已保存至: ${data.out_file}，请点击【导出列表】查看下载`, "SUCCESS", targetAction);
                   }
                   appendLog(
@@ -1460,14 +1659,22 @@ export default function App() {
             initial={{ opacity: 0, y: -20, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -20, scale: 0.95 }}
-            className={`absolute top-6 right-8 z-[100] flex items-center gap-3 px-6 py-4 rounded-2xl shadow-[0_10px_40px_rgba(0,0,0,0.3)] border backdrop-blur-xl ${
-              toastMsg.type === "success"
-                ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-200"
-                : toastMsg.type === "error"
-                  ? "bg-rose-500/10 border-rose-500/30 text-rose-200"
-                  : toastMsg.type === "warn"
-                    ? "bg-amber-500/10 border-amber-500/30 text-amber-200"
-                    : "bg-sky-500/10 border-sky-500/30 text-sky-200"
+            className={`absolute top-6 right-8 z-[100] flex items-center gap-3 px-6 py-4 rounded-2xl border backdrop-blur-xl ${
+              appTheme === 'light'
+                ? toastMsg.type === "success"
+                  ? "bg-emerald-50/95 border-emerald-200 text-emerald-800 shadow-lg shadow-emerald-100/40"
+                  : toastMsg.type === "error"
+                    ? "bg-rose-50/95 border-rose-200 text-rose-800 shadow-lg shadow-rose-100/40"
+                    : toastMsg.type === "warn"
+                      ? "bg-amber-50/95 border-amber-200 text-amber-800 shadow-lg shadow-amber-100/40"
+                      : "bg-sky-50/95 border-sky-200 text-sky-800 shadow-lg shadow-sky-100/40"
+                : toastMsg.type === "success"
+                  ? "bg-emerald-500/10 border-emerald-500/30 text-emerald-200 shadow-[0_10px_40px_rgba(0,0,0,0.3)]"
+                  : toastMsg.type === "error"
+                    ? "bg-rose-500/10 border-rose-500/30 text-rose-200 shadow-[0_10px_40px_rgba(0,0,0,0.3)]"
+                    : toastMsg.type === "warn"
+                      ? "bg-amber-500/10 border-amber-500/30 text-amber-200 shadow-[0_10px_40px_rgba(0,0,0,0.3)]"
+                      : "bg-sky-500/10 border-sky-500/30 text-sky-200 shadow-[0_10px_40px_rgba(0,0,0,0.3)]"
             }`}
           >
             <span className="text-[18px]">
@@ -1500,7 +1707,16 @@ export default function App() {
 
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col min-w-0 overflow-hidden relative z-10">
-        <Header activeMenu={activeMenu} theme={theme} onAction={handleAction} city={appConfig.city} appTheme={appTheme} onToggleTheme={() => setAppTheme(t => t === 'dark' ? 'light' : 'dark')} />
+        <Header 
+          activeMenu={activeMenu} 
+          theme={theme} 
+          onAction={handleAction} 
+          city={appConfig.city} 
+          appTheme={appTheme}
+          onToggleTheme={() => setAppTheme(t => t === 'dark' ? 'light' : 'dark')}
+          userProfile={userProfile}
+          onEditProfile={() => setShowProfileEdit(true)}
+        />
 
         <main className="flex-1 flex flex-col p-8 pb-4 gap-6 w-full max-w-[1600px] mx-auto min-h-0 relative z-10">
           {appTheme !== 'light' && (
@@ -1517,6 +1733,12 @@ export default function App() {
           {activeMenu === "deduction_config" && (
             <div className="flex-1 min-h-0 animate-in fade-in slide-in-from-bottom-4 duration-500">
               <DeductionConfigPanel theme={theme} />
+            </div>
+          )}
+
+          {activeMenu === "formula_config" && (
+            <div className="flex-1 min-h-0 animate-in fade-in slide-in-from-bottom-4 duration-500 h-full w-full flex flex-col">
+              <FormulaConfigPanel theme={theme} />
             </div>
           )}
 
@@ -1542,38 +1764,32 @@ export default function App() {
                   theme={theme}
                   appTheme={appTheme}
                   isRunning={runningTask === "core"}
-                  onRun={handleRun}
+                  onRun={() => handleRun({ action: "core" })}
                   progress={progress}
                   taskStats={taskStatsMap[activeMenu]}
+                  taskHistory={taskHistory}
+                  activeMenu={activeMenu}
                 />
               </div>
             </section>
           )}
 
           {activeMenu === "issue_orders" && (
-            <section className="flex-[4] min-h-[320px] flex gap-5 flex-shrink-0 items-stretch mb-2 relative z-50">
-              <div className="flex-[6] min-w-0 max-w-[850px] animate-in fade-in slide-in-from-bottom-4 duration-500 relative z-50">
-                <IssueOrderControlPanel
-                  theme={theme}
-                  config={appConfig}
-                  onChangeConfig={setAppConfig}
-                  onCheckCookie={() => handleAction("check_cookie")}
-                />
-              </div>
-              <div
-                className="flex-[4] min-w-0 bg-[#020410] light:bg-white border border-sky-500/10 light:border-slate-200 light:shadow-[0_2px_10px_rgba(0,0,0,0.05)] shadow-[0_0_15px_rgba(14,165,233,0.1)] rounded-3xl cyber-border overflow-hidden flex items-stretch justify-center p-5 animate-in fade-in slide-in-from-bottom-4 duration-500 delay-100 relative group"
-                style={{ animation: "glow-pulse 6s infinite ease-in-out" }}
-              >
-                <div className="absolute top-0 right-0 w-[2px] h-full bg-gradient-to-b from-transparent via-sky-400/20 to-transparent opacity-30" />
-                <IssueOrderActionPanel
-                  theme={theme}
-                  isRunning={runningTask === "issue_orders"}
-                  onRun={() => handleRun({ action: "issue_orders" })}
-                  progress={progress}
-                  taskStats={taskStatsMap[activeMenu]}
-                />
-              </div>
-            </section>
+            <div className="flex-1 w-full h-full min-h-0 flex pb-2 animate-in fade-in slide-in-from-bottom-4 duration-500 relative z-50">
+              <IssueOrderDashboard
+                theme={theme}
+                config={appConfig}
+                onChangeConfig={setAppConfig}
+                appTheme={appTheme}
+                onCheckCookie={(customCookie) => handleAction("check_cookie", customCookie ? { cookie: customCookie } : undefined)}
+                isRunning={runningTask === "issue_orders"}
+                onRun={() => handleRun({ action: "issue_orders" })}
+                progress={progress}
+                progressText={progressText}
+                logs={logs}
+                taskStats={taskStatsMap[activeMenu]}
+              />
+            </div>
           )}
 
           {activeMenu === "salary_bind" && (
@@ -1589,6 +1805,9 @@ export default function App() {
                   config={appConfig}
                   onAction={handleAction}
                   progress={progress}
+                  progressText={progressTextMap["salary_bind"] || "准备就绪 / READY"}
+                  lastOutput={lastSalaryBindOutput}
+                  onDownload={handleDownloadSalaryBindTable}
                 />
               </div>
 
@@ -1603,11 +1822,9 @@ export default function App() {
             </div>
           )}
 
-          {activeMenu === "chat" && (
-            <div className="flex-1 min-h-0 animate-in fade-in slide-in-from-bottom-4 duration-500 h-full max-h-[85vh]">
-              <ChatPanel workspaceId={workspaceId} />
-            </div>
-          )}
+          <div className={activeMenu === "chat" ? "flex-1 min-h-0 animate-in fade-in slide-in-from-bottom-4 duration-500 h-full max-h-[85vh]" : "hidden"}>
+            <ChatPanel workspaceId={workspaceId} userProfile={userProfile} onEditProfile={() => setShowProfileEdit(true)} />
+          </div>
 
           {activeMenu === "export_list" && (
             <div className="flex-1 min-h-0 animate-in fade-in slide-in-from-bottom-4 duration-500 h-full">
@@ -1631,6 +1848,7 @@ export default function App() {
             "export_list",
             "monitor",
             "chat",
+            "formula_config",
           ].includes(activeMenu) && (
             <section
               className={`flex-[4] min-h-[320px] flex gap-8 w-full flex-shrink-0 mb-2`}
@@ -1661,8 +1879,10 @@ export default function App() {
             "referral_internal",
             "referral_field",
             "salary_bind",
+            "issue_orders",
             "monitor",
             "chat",
+            "formula_config",
           ].includes(activeMenu) && (
             <section
               className="flex-[5] min-h-[280px] bg-[#020410] light:bg-white border border-sky-500/10 light:border-slate-200 light:shadow-[0_2px_10px_rgba(0,0,0,0.05)] rounded-[20px] cyber-border flex flex-col overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-500 delay-200 relative z-0"
@@ -1715,28 +1935,31 @@ export default function App() {
                       </div>
                     </div>
 
-                    {activeMenu === "core" && (
-                      <div className="flex items-center gap-4">
-                        {/* Toggles moved to ControlPanel */}
-                      </div>
-                    )}
                   </div>
 
                   <div className="flex-[4] min-w-0 flex items-center justify-end gap-2 h-[40px]">
-                    <button
-                      onClick={() => handleAction("add_task_root")}
-                      title="展开 / 添加任务"
-                      className="w-[36px] h-[36px] flex items-center justify-center hover:bg-slate-200/50 light:hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-600 light:text-slate-500 light:hover:text-slate-700 dark:text-slate-500 dark:hover:text-slate-300 rounded-lg transition-all text-[20px] font-light shadow-sm appearance-none group"
-                    >
-                      <span className="group-hover:scale-110 transition-transform leading-none mb-0.5">+</span>
-                    </button>
-                    <button
-                      onClick={() => handleAction("open_explorer")}
-                      title="导出日志 / 打开目录"
-                      className="w-[36px] h-[36px] flex items-center justify-center hover:bg-slate-200/50 light:hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-400 hover:text-slate-600 light:text-slate-500 light:hover:text-slate-700 dark:text-slate-500 dark:hover:text-slate-300 rounded-lg transition-all shadow-sm group"
-                    >
-                      <FolderOpen className="w-4 h-4 group-hover:scale-110 transition-transform" />
-                    </button>
+                    {activeMenu === "core" && (
+                      <>
+                        <button
+                          onClick={() => window.open("/api/download/template", "_blank")}
+                          className="px-3 py-1.5 bg-indigo-500/10 hover:bg-indigo-500/20 border border-indigo-500/30 text-indigo-400 light:bg-indigo-50 light:hover:bg-indigo-100 light:text-indigo-600 rounded-lg text-xs font-medium transition-colors flex items-center gap-1.5"
+                          title="下载兼职薪资模板"
+                        >
+                          <Download className="w-3.5 h-3.5" />
+                          导出模板
+                        </button>
+                        {lastOutputFolder && (
+                          <button
+                            onClick={handleDownloadSalaryTable}
+                            className="px-3 py-1.5 rounded-lg text-xs font-medium transition-colors flex items-center gap-1.5 border bg-emerald-500/10 hover:bg-emerald-500/20 border-emerald-500/30 text-emerald-400 light:bg-emerald-50 light:hover:bg-emerald-100 light:text-emerald-600"
+                            title="下载最近生成的薪资表"
+                          >
+                            <Download className="w-3.5 h-3.5" />
+                            导出生成薪资表
+                          </button>
+                        )}
+                      </>
+                    )}
                   </div>
                 </div>
               </div>
@@ -1804,6 +2027,15 @@ export default function App() {
       
       {showIdentitySetup && (
         <IdentitySetupModal theme={theme} onComplete={handleIdentityComplete} />
+      )}
+
+      {showProfileEdit && (
+        <ProfileEditModal
+          theme={theme}
+          profile={userProfile}
+          onSave={handleSaveProfile}
+          onClose={() => setShowProfileEdit(false)}
+        />
       )}
     </div>
   );

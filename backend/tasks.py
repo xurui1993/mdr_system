@@ -527,7 +527,9 @@ async def run_summary_parttime_gen(folder, city):
         yield create_progress_event(0.8)
 
         if merged_inc_data or merged_fun_data:
+            import re
             merged_filename = f"{city}兼职已发汇总.xlsx"
+            merged_filename = re.sub(r'[\\/:*?"<>|\r\n]', '-', merged_filename)
             merged_filepath = os.path.join(folder, merged_filename)
 
             def clean_and_type_data(data, headers):

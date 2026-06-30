@@ -758,16 +758,19 @@ async def run_issue_orders_task(config, base_path, log_cb, progress_cb, finish_c
         start_time = run_cfg.get('start_time', "")
         end_time = run_cfg.get('end_time', "")
         
-        log_cb("--- 开始执行爬取任务 ---", "INFO")
-        log_cb(f"时间范围: {start_time} 至 {end_time}", "INFO")
-        log_cb(f"目标城市数: {len(target_cities)}", "INFO")
+        log_cb("==================================================", "INFO")
+        log_cb("🚀 [系统启动] 问题单自动汇集与决策分析引擎启动中...", "INFO")
+        log_cb("==================================================", "INFO")
+        log_cb(f"📅 [统计范围] 目标数据周期: {start_time} 至 {end_time}", "INFO")
+        log_cb(f"📍 [覆盖节点] 目标计算城市数: {len(target_cities)} 个 ({', '.join(target_cities)})", "INFO")
+        log_cb("--------------------------------------------------", "INFO")
         
         dates = generate_dates_between(start_time, end_time)
         total_steps = len(target_cities)
         
         for city_idx, city_name in enumerate(target_cities):
             progress_cb(city_idx / total_steps, f"正在处理 {city_name}")
-            log_cb(f"--- 正在处理 {city_name} ---", "INFO")
+            log_cb(f"▶️ [城市任务] 正在处理城市: 【{city_name}】({city_idx + 1}/{len(target_cities)})", "INFO")
             
             type_list = ["差评","投诉","物流责","不准时单","欺诈单"]
             if city_name == "东莞":
@@ -782,7 +785,7 @@ async def run_issue_orders_task(config, base_path, log_cb, progress_cb, finish_c
             actual_base_dir = os.path.abspath(os.path.join(project_root, "..", "outputs", "问题单生成"))
             os.makedirs(actual_base_dir, exist_ok=True)
             
-            engine = SpiderEngine(config, base_dir=actual_base_dir, target_cities=city_name, log_cb=lambda msg: log_cb(msg, "INFO"))
+            engine = SpiderEngine(config, base_dir=actual_base_dir, target_cities=city_name, log_cb=lambda msg: log_cb(f"   [采集驱动] {msg}", "INFO"))
             
             # Dictionary to collect all chunk DataFrames in memory
             merged_results = {t: [] for t in type_list}
@@ -791,13 +794,21 @@ async def run_issue_orders_task(config, base_path, log_cb, progress_cb, finish_c
                 for i in range(0, len(dates), mun): 
                     await asyncio.sleep(0.1) # Yield
                     end_idx = min(i + mun - 1, len(dates) - 1)
-                    log_cb(f"爬取数据 [{dates[i]} - {dates[end_idx]}]", "INFO")
+                    
+                    # Compute progress
+                    chunk_ratio = i / len(dates)
+                    progress_val = (city_idx + chunk_ratio * 0.7) / total_steps
+                    progress_cb(progress_val, f"正在采集 {city_name} 数据 ({dates[i]} - {dates[end_idx]})")
+                    
+                    log_cb(f"📥 [网络数据] 正在采集 【{city_name}】 的周期段 [{dates[i]} 至 {dates[end_idx]}] 数据...", "INFO")
                     
                     waybill_path, bad_unit_path = engine.run(dates[i], dates[end_idx])
                     if waybill_path is None or bad_unit_path is None:
+                        log_cb(f"⚠️ [网络异常] 周期段 [{dates[i]} 至 {dates[end_idx]}] 抓取失败，跳过", "WARN")
                         continue
                         
-                    log_cb(f"数据清理中...", "INFO")
+                    progress_cb((city_idx + (chunk_ratio + mun/len(dates)) * 0.7) / total_steps, f"正在清洗 {city_name} 数据...")
+                    log_cb(f"🧹 [数据清洗] 正在执行对 【{city_name}】 已采集切片的数据清洗...", "INFO")
                     cleaner = DataCleaner(waybill_path, bad_unit_path)
                     df_dict = cleaner.run(type_list)
                     
@@ -806,17 +817,20 @@ async def run_issue_orders_task(config, base_path, log_cb, progress_cb, finish_c
                         if t in df_dict and not df_dict[t].empty:
                             merged_results[t].append(df_dict[t])
             else:
-                log_cb(f"爬取数据 [{start_time} - {end_time}]", "INFO")
+                progress_cb((city_idx + 0.2) / total_steps, f"正在采集 {city_name} 周期数据...")
+                log_cb(f"📥 [网络数据] 正在采集 【{city_name}】 周期数据段 [{start_time} 至 {end_time}]...", "INFO")
                 waybill_path, bad_unit_path = engine.run(start_time, end_time)
                 if waybill_path is not None and bad_unit_path is not None:
-                    log_cb(f"数据清理中...", "INFO")
+                    progress_cb((city_idx + 0.6) / total_steps, f"正在清洗 {city_name} 数据...")
+                    log_cb(f"🧹 [数据清洗] 正在清洗 【{city_name}】 已采集切片的数据...", "INFO")
                     cleaner = DataCleaner(waybill_path, bad_unit_path)
                     df_dict = cleaner.run(type_list)
                     for t in type_list:
                         if t in df_dict and not df_dict[t].empty:
                             merged_results[t].append(df_dict[t])
 
-            log_cb(f"合并数据...", "INFO")
+            progress_cb((city_idx + 0.8) / total_steps, f"正在合并并生成 {city_name} 汇总文件...")
+            log_cb(f"🔄 [数据重构] 正在执行城市级 【{city_name}】 全量差评、超时、投诉、欺诈多维对齐与合并...", "INFO")
             
             type_dict = {}
             for t in type_list:
@@ -825,19 +839,22 @@ async def run_issue_orders_task(config, base_path, log_cb, progress_cb, finish_c
                 else:
                     type_dict[t] = pd.DataFrame()
             
-            log_cb(f"生成问题单及汇总文件...", "INFO")
+            progress_cb((city_idx + 0.9) / total_steps, f"正在写盘并建立 Excel 表单...")
+            log_cb(f"💾 [生成报表] 正在写入 Excel 工作表并建立本地高速索引表...", "INFO")
             merge_penalty = MergePenaltyRecords(city_name, start_time, base_dir=actual_base_dir)
             merge_penalty.save_dict_to_xlsx(type_dict)
             merge_penalty.save_sum_data(type_dict)
             
-            log_cb(f"生成的汇总文件保存在: {merge_penalty.output_path_sum}", "SUCCESS")
-            
-            log_cb(f"{city_name} 处理完成", "SUCCESS")
+            log_cb(f"✅ [本地存储] 汇总分析报告已安全写盘: {merge_penalty.output_path_sum}", "SUCCESS")
+            log_cb(f"🎉 [城市完成] 城市 【{city_name}】 的数据流全链处理完毕！", "SUCCESS")
+            log_cb("--------------------------------------------------", "INFO")
             
         progress_cb(1.0, "全部处理完成")
         elapsed_time = time.time() - start_time_total
-        log_cb("--- 所有任务执行完毕 ---", "SUCCESS")
-        log_cb(f"问题单生成耗时时长: {elapsed_time:.2f} 秒")
+        log_cb("==================================================", "SUCCESS")
+        log_cb("🎉 [任务圆满结束] 所有城市问题单自动汇集及汇总生成任务已执行完毕！", "SUCCESS")
+        log_cb(f"⏱️ [运行效率] 引擎计算累计耗时: {elapsed_time:.2f} 秒", "SUCCESS")
+        log_cb("==================================================", "SUCCESS")
         stats_info = {"elapsed_time": round(elapsed_time, 2)}
         finish_cb("success", "问题单生成完毕", stats_info)
         

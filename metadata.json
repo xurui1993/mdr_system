@@ -1,5 +1,5 @@
 {
-  "name": "薪资核算系统",
+  "name": "薪酬核算中心",
   "description": "专为复杂的数据整理、薪资匹配以及 Excel 并发处理设计的桌面/Web级系统",
   "requestFramePermissions": ["downloads"],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]

@@ -24,7 +24,14 @@ const fetchStats = async () => {
     if (!response.ok) {
       throw new Error("Failed to fetch system stats");
     }
-    const json = await response.json();
+    const text = await response.text();
+    let json;
+    try {
+      json = JSON.parse(text);
+    } catch (e) {
+      console.error("Invalid JSON response:", text.substring(0, 100));
+      return;
+    }
     
     if (json.success) {
       const now = new Date();

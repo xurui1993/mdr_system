@@ -1,4 +1,6 @@
-import React, { useRef, useCallback, useEffect, useState } from "react";
+const fs = require('fs');
+
+const sidebarCode = `import React, { useRef, useCallback, useEffect, useState } from "react";
 import { Theme } from "../types";
 import { motion, AnimatePresence } from "motion/react";
 import { 
@@ -11,9 +13,7 @@ import {
   Coffee, 
   Activity,
   ChevronLeft,
-  ChevronRight,
-  Calculator,
-  Download
+  ChevronRight
 } from "lucide-react";
 
 interface SidebarProps {
@@ -39,7 +39,6 @@ export function Sidebar({
     { id: "core", icon: <CircleDollarSign size={isCollapsed ? 22 : 18} strokeWidth={2} />, label: "兼职薪资核算", color: "text-amber-400" },
     { id: "issue_orders", icon: <FileWarning size={isCollapsed ? 22 : 18} strokeWidth={2} />, label: "问题单生成", color: "text-rose-400" },
     { id: "deduction_config", icon: <SlidersHorizontal size={isCollapsed ? 22 : 18} strokeWidth={2} />, label: "扣款项配置", color: "text-purple-400" },
-    { id: "formula_config", icon: <Calculator size={isCollapsed ? 22 : 18} strokeWidth={2} />, label: "薪资表模板引擎", color: "text-pink-400" },
     { id: "chat", icon: <Coffee size={isCollapsed ? 22 : 18} strokeWidth={2} />, label: "带薪摸鱼官", color: "text-sky-400" },
     { id: "monitor", icon: <Activity size={isCollapsed ? 22 : 18} strokeWidth={2} />, label: "任务监控", color: "text-teal-400" },
     { id: "export_list", icon: <CloudDownload size={isCollapsed ? 22 : 18} strokeWidth={2} />, label: "任务下载", color: "text-indigo-400" },
@@ -85,10 +84,10 @@ export function Sidebar({
       </div>
 
       {/* Branding */}
-      <div className={`px-5 pt-8 pb-8 flex flex-col items-center relative z-10 ${isCollapsed ? 'justify-center' : ''}`}>
+      <div className={\`px-5 pt-8 pb-8 flex flex-col items-center relative z-10 \${isCollapsed ? 'justify-center' : ''}\`}>
         <h1 className="font-sans text-2xl font-black tracking-tight text-slate-100 light:text-slate-800 cursor-pointer flex items-center gap-2 group">
           <div className="w-8 h-8 rounded-lg bg-indigo-500/20 text-indigo-400 flex items-center justify-center border border-indigo-500/30 group-hover:scale-110 transition-transform duration-300 shrink-0">
-            <Calculator size={18} strokeWidth={2.5} />
+            <Command size={18} strokeWidth={2.5} />
           </div>
           {!isCollapsed && (
             <motion.span 
@@ -123,11 +122,11 @@ export function Sidebar({
                 onClick={() => { handleMouseLeave(); onSelectMenu(item.id); }}
                 onMouseEnter={() => handleMouseEnter(item.id)}
                 onMouseLeave={handleMouseLeave}
-                className={`w-full flex items-center ${isCollapsed ? 'justify-center px-0' : 'px-3'} py-3 rounded-xl transition-all duration-300 text-[14px] font-medium relative group ${
+                className={\`w-full flex items-center \${isCollapsed ? 'justify-center px-0' : 'px-3'} py-3 rounded-xl transition-all duration-300 text-[14px] font-medium relative group \${
                   isActive
                     ? "text-slate-100 light:text-slate-900 bg-white/5 light:bg-slate-200/50 shadow-sm border border-white/5 light:border-slate-300/50"
                     : "text-slate-400 light:text-slate-500 hover:bg-slate-800/40 light:hover:bg-slate-100/80 hover:text-slate-200 light:hover:text-slate-800 border border-transparent"
-                }`}
+                }\`}
                 title={isCollapsed ? item.label : undefined}
               >
                 {isActive && (
@@ -137,9 +136,9 @@ export function Sidebar({
                   />
                 )}
                 {item.id === 'chat' && hasUnreadChat && activeMenu !== 'chat' && (
-                  <div className={`absolute ${isCollapsed ? 'top-1 right-1' : 'top-3 right-3'} w-2 h-2 rounded-full bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.6)] animate-pulse`}></div>
+                  <div className={\`absolute \${isCollapsed ? 'top-1 right-1' : 'top-3 right-3'} w-2 h-2 rounded-full bg-rose-500 shadow-[0_0_8px_rgba(244,63,94,0.6)] animate-pulse\`}></div>
                 )}
-                <span className={`${isCollapsed ? '' : 'mr-3 ml-1'} flex-shrink-0 transition-all duration-300 ${isActive ? 'scale-110 ' + item.color : 'group-hover:scale-110 group-hover:' + item.color}`}>
+                <span className={\`\${isCollapsed ? '' : 'mr-3 ml-1'} flex-shrink-0 transition-all duration-300 \${isActive ? 'scale-110 ' + item.color : 'group-hover:scale-110 group-hover:' + item.color}\`}>
                   {item.icon}
                 </span>
                 {!isCollapsed && (
@@ -157,6 +156,23 @@ export function Sidebar({
           })}
         </div>
       </div>
+      
+      {/* Collapse Toggle Button */}
+      <div className="relative z-10 p-4 border-t border-slate-800/50 light:border-slate-200/50 flex justify-center">
+        <button
+          onClick={() => setIsCollapsed(!isCollapsed)}
+          className="w-8 h-8 rounded-full bg-slate-800/50 light:bg-slate-200 flex items-center justify-center text-slate-400 hover:text-slate-100 hover:bg-slate-700 light:hover:bg-slate-300 transition-colors border border-slate-700/50 light:border-slate-300 shadow-sm group"
+        >
+          <motion.div
+            animate={{ rotate: isCollapsed ? 180 : 0 }}
+            transition={{ duration: 0.3 }}
+          >
+            <ChevronLeft size={16} className="group-hover:scale-110 transition-transform" />
+          </motion.div>
+        </button>
+      </div>
     </motion.div>
   );
 }
+`;
+fs.writeFileSync('src/components/Sidebar.tsx', sidebarCode);

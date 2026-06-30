@@ -176,24 +176,19 @@ async def run_salary_bind_gen(source_path, target_path=None, base_path=None, ded
         # 1. 整理 df_detail
         if not df_detail.empty:
             df_order = df_detail.copy()
-            order_col = get_col(df_order, ["有效完成单", "有效完成单量", "单量", "单量汇总", "自然月有效完成单量"])
+            # 取消容错机制，改用精准列匹配
+            order_col = "自然月有效完成单量" if "自然月有效完成单量" in df_order.columns else None
+            rid_col = "骑手id(风神)" if "骑手id(风神)" in df_order.columns else None
+            team_col = "团队名称" if "团队名称" in df_order.columns else None
+            name_col = "骑手姓名" if "骑手姓名" in df_order.columns else None
+            
             if order_col:
                 df_order[order_col] = pd.to_numeric(df_order[order_col], errors='coerce').fillna(0)
-            rid_col = get_col(df_order, ["骑手ID", "骑手id", "ID", "id", "骑手id(风神)"])
-            team_col = get_col(df_order, ["团队名称", "站点名称", "加盟商名称", "团队", "站点"])
-            if team_col:
-                df_order[team_col] = df_order[team_col].astype(str).str.replace(r'_?新专送', '', regex=True)
-            name_col = get_col(df_order, ["骑手姓名", "姓名"])
             
             if rid_col and team_col and order_col and name_col:
-                station_sum = df_order.groupby([rid_col, team_col], as_index=False)[order_col].sum()
-                station_sum = station_sum.sort_values([rid_col, order_col], ascending=[True, False])
-                best_station = station_sum.drop_duplicates(subset=[rid_col], keep='first')
-                total_sum = df_order.groupby(rid_col, as_index=False)[order_col].sum().rename(columns={order_col: "单量汇总"})
-                names_df = df_order.drop_duplicates(subset=[rid_col])[[rid_col, name_col]]
-                
-                df_base = pd.merge(best_station[[rid_col, team_col]], total_sum, on=rid_col)
-                df_base = pd.merge(df_base, names_df, on=rid_col)
+                # 提取到的团队名称，骑手ID，骑手姓名列需进行去重，最终按团队名称汇总骑手总单量
+                df_base = df_order.groupby([team_col, rid_col, name_col], as_index=False)[order_col].sum()
+                df_base.rename(columns={order_col: "单量汇总"}, inplace=True)
             else:
                 df_base = pd.DataFrame(columns=[rid_col or "RID", team_col or "TEAM", "单量汇总", name_col or "NAME"])
         else:
@@ -210,14 +205,12 @@ async def run_salary_bind_gen(source_path, target_path=None, base_path=None, ded
                     if not city_name: continue
                     for site_data in city_data.get('sites', []):
                         team_name = str(site_data.get('name', '')).strip()
-                        team_name = re.sub(r'_?新专送', '', team_name)
                         if team_name:
                             config_mapping[team_name] = city_name
             else:
                 # 兼容老版本
                 for rule in deductionRules:
                     teamName = str(rule.get("teamName", "")).strip()
-                    teamName = re.sub(r'_?新专送', '', teamName)
                     city = str(rule.get("city", "")).strip()
                     if teamName and city:
                         config_mapping[teamName] = city
@@ -227,10 +220,14 @@ async def run_salary_bind_gen(source_path, target_path=None, base_path=None, ded
             config_wb_path = None
             
             # 优先检查应用根目录
+            project_root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
             for fname in ["config.xlsx", "配置.xlsx", "config.csv"]:
-                p = os.path.join(os.getcwd(), fname)
-                if os.path.exists(p):
-                    config_wb_path = p
+                for base_p in [os.getcwd(), project_root_dir]:
+                    p = os.path.join(base_p, fname)
+                    if os.path.exists(p):
+                        config_wb_path = p
+                        break
+                if config_wb_path:
                     break
                     
             if not config_wb_path:
@@ -247,7 +244,7 @@ async def run_salary_bind_gen(source_path, target_path=None, base_path=None, ded
                     for _, row in df_config.iterrows():
                         team_name = str(row.get("团队名称", "")).strip()
                         city_name = str(row.get("城市", "")).strip()
-                        if team_name and city_name:
+                        if team_name and city_name and city_name != "nan":
                             config_mapping[team_name] = city_name
                     yield create_log_event(f">>> 从外部配置文件 [{os.path.basename(config_wb_path)}] 中读取了 {len(config_mapping)} 个团队的城市映射！", "INFO")
                 except Exception as e:
@@ -267,7 +264,7 @@ async def run_salary_bind_gen(source_path, target_path=None, base_path=None, ded
             idcards = df_i_valid[info_idcard_col].astype(str).str.strip() if info_idcard_col else [""] * len(df_i_valid)
             phones = df_i_valid[info_phone_col].astype(str).str.strip().str.replace(".0", "", regex=False) if info_phone_col else [""] * len(df_i_valid)
             names = df_i_valid[info_name_col].astype(str).str.strip() if info_name_col else [""] * len(df_i_valid)
-            teams = df_i_valid[info_team_col].astype(str).str.strip().str.replace(r'_?新专送', '', regex=True) if info_team_col else [""] * len(df_i_valid)
+            teams = df_i_valid[info_team_col].astype(str).str.strip() if info_team_col else [""] * len(df_i_valid)
             
             # 用于补充 base 的记录
             existing_base_rids = set(df_base[rid_col].astype(str).str.strip().str.replace(".0", "", regex=False)) if not df_base.empty and rid_col in df_base.columns else set()
@@ -342,6 +339,7 @@ async def run_salary_bind_gen(source_path, target_path=None, base_path=None, ded
         
         yield create_progress_event(0.6)
         
+        import re
         for r_id, r_team, r_name, r_orders in zip(base_rids, base_teams, base_names, base_orders):
             r_city = config_mapping.get(r_team, "未知")
             info_data = info_mapping.get(r_id, {"idcard": "", "phone": ""})
@@ -391,7 +389,7 @@ async def run_salary_bind_gen(source_path, target_path=None, base_path=None, ded
 
         def _write_main_wb():
             # 处理逻辑：将处理完毕的数据格式化后输出写入到外部Excel或CSV文件
-            with pd.ExcelWriter(output_file, engine='xlsxwriter', engine_kwargs={'options': {'constant_memory': True}}) as writer:
+            with pd.ExcelWriter(output_file, engine='xlsxwriter') as writer:
                 # 1. 预处理转数值
                 if "骑手ID" in df_sht1.columns:
                     df_sht1["骑手ID"] = pd.to_numeric(df_sht1["骑手ID"], errors='coerce')
@@ -443,14 +441,14 @@ async def run_salary_bind_gen(source_path, target_path=None, base_path=None, ded
                     ("薪资代领明细", df_dailing)
                 ]
                 
-                # 2. 写入数据表 (提前创建sheet并分配样式，流式极速写入)
+                # 2. 写入数据表
                 for sheet_name, df_obj in sheets_to_write:
                     if df_obj.empty:
                         df_obj.to_excel(writer, sheet_name=sheet_name, index=False)
                         continue
                     
-                    ws = workbook.add_worksheet(sheet_name)
-                    writer.sheets[sheet_name] = ws
+                    df_obj.to_excel(writer, sheet_name=sheet_name, index=False)
+                    ws = writer.sheets[sheet_name]
                     
                     for i, col in enumerate(df_obj.columns):
                         is_id = "ID" in str(col).upper()
@@ -458,9 +456,6 @@ async def run_salary_bind_gen(source_path, target_path=None, base_path=None, ded
                     
                     # 写入表头，使用指定的格式
                     ws.write_row(0, 0, df_obj.columns.values, header_format)
-                    
-                    # 数据按行注入，极速模式流式写入
-                    df_obj.to_excel(writer, sheet_name=sheet_name, index=False, header=False, startrow=1)
                                 
             return True
 
@@ -482,7 +477,7 @@ async def run_salary_bind_gen(source_path, target_path=None, base_path=None, ded
             df_city_sht1 = df_sht1[df_sht1["城市"] == city]
             df_city_sht2 = df_sht2[df_sht2["城市"] == city]
             
-            with pd.ExcelWriter(city_output_file, engine='xlsxwriter', engine_kwargs={'options': {'constant_memory': True}}) as city_writer:
+            with pd.ExcelWriter(city_output_file, engine='xlsxwriter') as city_writer:
                 city_workbook = city_writer.book
                 
                 c_header_format = city_workbook.add_format({
@@ -515,15 +510,14 @@ async def run_salary_bind_gen(source_path, target_path=None, base_path=None, ded
                         d_obj.to_excel(city_writer, sheet_name=s_name, index=False)
                         continue
                         
-                    ws = city_workbook.add_worksheet(s_name)
-                    city_writer.sheets[s_name] = ws
+                    d_obj.to_excel(city_writer, sheet_name=s_name, index=False)
+                    ws = city_writer.sheets[s_name]
                     
                     for i, col in enumerate(d_obj.columns):
                         is_id = "ID" in str(col).upper()
                         ws.set_column(i, i, 16 if is_id else 14, c_id_num_format if is_id else c_cell_format)
                     
                     ws.write_row(0, 0, d_obj.columns.values, c_header_format)
-                    d_obj.to_excel(city_writer, sheet_name=s_name, index=False, header=False, startrow=1)
                     
             return city_wb_name
 
@@ -602,6 +596,15 @@ async def run_salary_bind_gen(source_path, target_path=None, base_path=None, ded
                 "overall": overall_stats,
                 "cities": city_stats
             }
+            
+            # Save to json file
+            try:
+                stats_file = os.path.join(output_dir, "stats.json")
+                import json
+                with open(stats_file, 'w', encoding='utf-8') as f:
+                    json.dump(stats_data, f, ensure_ascii=False, indent=2)
+            except Exception as e:
+                pass
 
         yield create_finish_event("success", "骑手支付绑定任务执行完成。休眠中...", output_file, stats_data)
 

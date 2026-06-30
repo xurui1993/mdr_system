@@ -4,6 +4,7 @@ import { createServer as createViteServer } from "vite";
 import { spawn } from "child_process";
 import { createProxyMiddleware } from "http-proxy-middleware";
 import fs from "fs";
+import os from "os";
 import multer from "multer";
 import AdmZip from "adm-zip";
 
@@ -115,10 +116,36 @@ async function startServer() {
       wid = req.query.workspace_id ? String(req.query.workspace_id) : "default";
     }
     return wid.toString()
-      .replace(/[^a-zA-Z0-9_\-\u4e00-\u9fa5\.]/g, "");
+      .replace(/[^a-zA-Z0-9_\n        fileUrl: fileUrl || null,\n        fileName: fileName || null,\n        profile: profile || socket.data.profile || null,-\u4e00-\u9fa5\.]/g, "");
   };
 
   const isCloudEnvironment = !!process.env.K_SERVICE || !!process.env.K_REVISION || !!process.env.DISABLE_HMR;
+
+  
+  app.get("/api/chat/config", (req, res) => {
+    res.json({
+      groupName: "全员广场",
+      welcomeMessages: [
+        "操作员已成功进入系统！",
+        "今日业务准备就绪，准时打卡！",
+        "安全校验通过，已签到登录。",
+        "各项服务状态良好，签到完毕。",
+        "开启高效核算的一天！"
+      ],
+      logicAnswers: {"为什么团队名称修改后蓝橙无单价？":"**关于团队名称同步与匹配蓝橙单价的问题排查**\\n您好，关于此问题，系统确实已经将**“团队名称”**全面同步到了整个蓝橙单价甚至全局的匹配逻辑中。导致现在全部显示“无单价”的原因并非没同步，而是**数据本身存在字符串匹配差异**。\\n\\n* **旧版逻辑（兼容团队ID）**：之前系统对“团队”关键词抓取时没有过滤掉 `id` 字符，这就导致如果列名为“团队id”，系统会默认抓取到两个表的【团队ID】进行数值比对（例如 `123456` == `123456`），因为数字ID高度一致不会带有多余空格字眼，所以能够成功匹配出单价。\\n* **当前逻辑（强制匹配团队名称）**：为了响应您对于“日单量表直接匹配团队名称而不是团队ID”的需求，系统现已全面排除了 `id`，强制提取【团队名称】。一旦系统使用这种方式，您的“日单量表（业务明细）”中“团队名称”列的中文文本，与您存放在 `兼职价格档案` 等配置文件中填写的“团队名称”一旦存在**任何微小差异**（如包含多余空格、或者简称“南山一队”对照“南山区一站”等没有严格对齐），就会导致查无此站，触发默认价格“无”。\\n* **解决方案建议**：由于中文团队名称极其容易出现数据源填报差异（导致无法精确命中索引字典），建议您排查工资业务表和价格档案两端是否存在团队名称文本不统一或含有不可见字符的问题。如果您希望恢复此前精准的匹配体验，可以再次告知我：**“帮我把兼职和蓝橙的匹配基准回滚为团队ID”** 或者您核对一下价格表及明细表的团队名称确切保持100%中文一致来解决。","安全基金表出勤天数生成逻辑？":"**安全基金中出勤天数的计算逻辑**\\n系统中的安全基金/非蜂卡的考勤扣减依据如下：\\n\\n* **有效计算**：读取处理后的发薪详单，剔除掉标红的“欺诈单（值为0不核算）”后，统计每一位骑手在不同“账单时间”（自然日）下产生过完单的不重复天数。\\n* **合并主站点规则**：有些骑手可能会在同个月内横跨跑了多个团队站点。为了避免同一个骑手多份挂靠扣费，代码会计算他**单量最多**的那个团队作为“主站”。所有出勤天数将会全部汇总合并展示在他的主站明细下；其他辅助站点其名下的出勤天均标记为 0，以此避免对同一个骑手重复叠加扣取安全基金。\\n* **梯度天数逻辑**：由 `calc_deduction_new` 控制算法。若汇总的出勤天不足 15 天，按“（对应金额 ÷ 当月天数）× 实际出勤天数”折算出安全基金；如果出勤满 15 天及以上，则直接按满月正常天数直接扣整额。","价格档案匹配逻辑是怎样的？":"**关于价格匹配逻辑（蓝橙单价/兼职单价）**\\n目前系统的单价核心匹配逻辑是一套严格的三重主键比对机制：\\n\\n* **数据预处理：** 当系统读取「兼职价格档案」和「日单量日结表」时，会自动精准匹配抓取核心字段。\\n* **精准匹配：** 根据日期、站点、风神骑手ID等组合进行绝对匹配。","全勤出勤天数计算逻辑是什么？":"**出勤天数计算引擎**\\n核算系统同时参考两大数据源，以确保数据公正并防止作弊。","配送所得基础工资怎么算？":"**配送所得的基本核算公式**\\n系统执行的核心价值在于将庞大繁琐的运单最终转化为实际金额。生成逻辑：\\n\\n* **基础匹配公式**： `单笔配送费 = 有效完成单 × 命中单价`\\n* **有效单筛选**：在实际相乘之前，会预先剔除被标记为“取消单”、“欺诈单”的数据。只有【完成单】可以进入基数。\\n* **阶梯激励计算**：部分团队或城市如果开启了超量阶梯配置（如，月累计超过800单后，每单额外补0.5元）。处理器会统计个人的该月累计单量 `sum_orders`，当超过特定阈值段时，自动为超过的部分赋予高阶价格并差额补贴。\\n* **输出写入**：计算后的结果会通过预制的公式或者数值写入到最终工资表的 `【配送所得】` 栏位中，作为加项金额。","蓝橙单价反写到配送所得表备注中匹配逻辑是怎样的？":"**单价反写至“配送所得表”备注的逻辑规则**\\n为了能在此表中直观看到骑手该月经历的单价变动，系统会执行一套回写匹配：\\n\\n* **核心关联主键**：程序在读取到“配送所得表”时，会逐行提取当前行的 **【团队名称】** 和 **【风神骑手ID】**。\\n* **追溯历史单价**：随后使用这一对复合主键 `团队名称 + 骑手ID`，去庞大的“日单量”表底表记录字典中查找该名骑手在整个计算周期内的“每天对应的单价值”。\\n* **高级聚合与备注生成**：\\n * **单一价格：** 如果该骑手整个周期内价格自始至终没变，备注栏会被**自动清空**以保持版面整洁，并在专设的“蓝橙单价”列单独填入具体价格数字。\\n * **多重价格变动：** 当骑手被匹配到多个不同日期的有效价格时，程序会按自然日对价格进行连续性折叠聚合，将变动记录按日期回写到 `备注` 栏位（生成形如 `1日-15日单价5.5元；16日-30日单价6元` 的字符串记录）。并在“蓝橙单价”专属列打上分号分割的标记（如 `5.5;6`）。\\n * **无单价记录：** 如果该骑手在某些天份未能获取到价格（判定为无单价），系统一定会重点将其断带日期强制注入备注（如 `4日-7日无单价`），以警示复核人员。\\n\\n**总结**：配送所得表反写单价的基础是严格依赖 **团队名称 + 骑手ID**，只要这两个字段与日单量表里的该员工所属团队及ID相同，备注及价格变动记录必会成功反写。","为什么会有跨站合并的情况？":"**跨站（多团队挂靠）的数据合并初衷**\\n实际运营中，因为运力调度或兼职骑手活跃区域变动，常常引发一个骑手当月归属于多个不同网格站：\\n\\n* **唯一主键整合**：为了避免同一员工因为跑了不同的站，最终收到支离破碎的多次小额发薪或被**重复扣除安全基金卡费**。计算系统始终以 `唯一骑手身份证ID/系统ID` 作为聚合主键。\\n* **提取与汇总**：代码会自动跨所有的站点分表，提取该主键产生过的所有单量、额外津贴及扣除款项。\\n* **主从关系输出**：它将判断哪个网格站的完成单量占比最高（即“主站”），并将汇总后“一整条合并且完整的流水记录”全部归并展示在主站。辅站仅仅保留基础业务痕迹，但薪资金额标记为 `[已合并至主站]`，最终实发呈现出整齐唯一的结果。"}, quickPhrases: [
+        "为什么团队名称修改后蓝橙无单价？",
+        "安全基金表出勤天数生成逻辑？",
+        "价格档案匹配逻辑是怎样的？",
+        "出勤天数异常怎么处理？",
+        "违规单和问题单怎么处理？",
+        "后台数据同步有延迟吗？",
+        "今天的蓝橙单价更新了吗？",
+        "发现个别兼职运单核对不上。",
+        "有没有最新版的操作手册？",
+        "这批问题单生成耗时比昨天长。"
+      ]
+    });
+  });
 
   app.get("/api/sys-info", (req, res) => {
     const ip = req.headers["x-forwarded-for"] || req.socket.remoteAddress || "127.0.0.1";
@@ -418,6 +445,55 @@ async function startServer() {
     }
   });
 
+  app.post("/api/upload/chat_file", upload.array("files"), (req, res) => {
+    try {
+      const files = req.files as Express.Multer.File[];
+      if (!files || files.length === 0) {
+        return res.status(400).json({ success: false, error: "No files uploaded" });
+      }
+      
+      const wid = getWorkspaceId(req);
+      const rootOutputs = path.join(process.cwd(), "..", "outputs");
+      if (!fs.existsSync(rootOutputs)) fs.mkdirSync(rootOutputs, { recursive: true });
+      
+      const targetDir = path.join(rootOutputs, wid);
+      if (!fs.existsSync(targetDir)) fs.mkdirSync(targetDir, { recursive: true });
+      
+      let paths = req.body.paths;
+      if (typeof paths === "string") {
+        try {
+          paths = JSON.parse(paths);
+        } catch(e) {}
+      }
+      
+      if (!paths || !Array.isArray(paths)) {
+         paths = files.map(f => Buffer.from(f.originalname, 'latin1').toString('utf8'));
+      }
+      
+      const uploadedInfo: Array<{name: string, path: string, url: string}> = [];
+      
+      for (let i = 0; i < files.length; i++) {
+         const file = files[i];
+         const relativePath = paths[i] || Buffer.from(file.originalname, 'latin1').toString('utf8');
+         const targetPath = path.join(targetDir, relativePath);
+         
+         const dir = path.dirname(targetPath);
+         if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+         
+         fs.copyFileSync(file.path, targetPath);
+         uploadedInfo.push({
+           name: relativePath,
+           path: targetPath,
+           url: `/api/download?path=${encodeURIComponent(targetPath)}`
+         });
+      }
+      
+      res.json({ success: true, files: uploadedInfo });
+    } catch (e) {
+      res.status(500).json({ success: false, error: String(e) });
+    }
+  });
+
   app.post(
     "/api/upload/source_zip",
     upload.single("file"),
@@ -544,7 +620,6 @@ async function startServer() {
   });
 
   app.get("/api/system/stats", async (req, res) => {
-    const os = await import("os");
     const cpus = os.cpus();
     let totalUser = 0;
     let totalSys = 0;
@@ -712,16 +787,19 @@ async function startServer() {
 
   const io = new SocketIOServer(server, { cors: { origin: "*" } });
 
+  const chatHistory = new Map();
+
   io.on("connection", (socket) => {
     socket.on("join", async (data) => {
-      const { workspaceId, username } = data;
+      const { workspaceId, username, profile } = data;
 
       // ID limit constraint Check
-      let safeUsername = (username || "无名小妖").substring(0, 15);
+      let safeUsername = (username || "匿名用户").substring(0, 15);
 
       socket.join(workspaceId);
       socket.data.workspaceId = workspaceId;
       socket.data.username = safeUsername;
+      socket.data.profile = profile;
 
       let ip =
         socket.handshake.headers["x-forwarded-for"] ||
@@ -731,6 +809,11 @@ async function startServer() {
       if (typeof ip === "string") ip = ip.split(",")[0].trim();
       // basic anonymize for safety/style if desired, or keep raw.
       socket.data.ip = ip;
+
+      if (!chatHistory.has(workspaceId)) {
+        chatHistory.set(workspaceId, []);
+      }
+      socket.emit("history", chatHistory.get(workspaceId));
 
       const sendPresence = async () => {
         const sockets = await io.in(workspaceId).fetchSockets();
@@ -749,7 +832,8 @@ async function startServer() {
               username: s.data.username,
               ip: s.data.ip,
               socketId: s.id,
-              status: "online",
+              profile: s.data.profile,
+              status: s.data.profile?.status || "在线",
             });
           }
         });
@@ -759,9 +843,9 @@ async function startServer() {
     });
 
     socket.on("message", async (data) => {
-      const { workspaceId, username, text, imageUrl } = data;
+      const { workspaceId, username, text, imageUrl, fileUrl, fileName, profile } = data;
 
-      let safeUsername = (username || "无名小妖").substring(0, 15);
+      let safeUsername = (username || "匿名用户").substring(0, 15);
       let ip =
         socket.handshake.headers["x-forwarded-for"] ||
         socket.handshake.address ||
@@ -769,18 +853,55 @@ async function startServer() {
       if (Array.isArray(ip)) ip = ip[0];
       if (typeof ip === "string") ip = ip.split(",")[0].trim();
 
-      io.to(workspaceId).emit("message", {
-        id: Date.now().toString(),
+      const msg = {
+        id: Date.now().toString() + Math.random().toString(36).substring(2, 9), fromId: socket.id,
         username: safeUsername,
+        profile: profile,
         text: text ? text.substring(0, 1000) : "",
         imageUrl: imageUrl || null,
+        fileUrl: fileUrl || null,
+        fileName: fileName || null,
         ip: ip,
         timestamp: new Date().toISOString(),
+      };
+      
+      if (!chatHistory.has(workspaceId)) {
+        chatHistory.set(workspaceId, []);
+      }
+      chatHistory.get(workspaceId).push(msg);
+      if (chatHistory.get(workspaceId).length > 200) {
+        chatHistory.get(workspaceId).shift();
+      }
+
+      io.to(workspaceId).emit("message", msg);
+    });
+
+    socket.on("clear", () => {
+      // no-op on server since users clear their own locally now
+    });
+
+    socket.on("update_profile", async (profile) => {
+      socket.data.profile = profile;
+      const workspaceId = socket.data.workspaceId;
+      if (!workspaceId) return;
+      const sockets = await io.in(workspaceId).fetchSockets();
+      const userMap = new Map();
+      sockets.forEach((s) => {
+        if (s.data.username && !userMap.has(s.data.username)) {
+          userMap.set(s.data.username, {
+            username: s.data.username,
+            ip: s.data.ip,
+            socketId: s.id,
+            profile: s.data.profile,
+            status: s.data.profile?.status || "在线",
+          });
+        }
       });
+      io.to(workspaceId).emit("presence", Array.from(userMap.values()));
     });
 
     socket.on("private_message", (data) => {
-      const { toId, text, imageUrl } = data;
+      const { toId, text, imageUrl, fileUrl, fileName, profile } = data;
       const username = socket.data.username;
 
       let safeUsername = (username || "无名小妖").substring(0, 15);
@@ -792,28 +913,35 @@ async function startServer() {
       if (typeof ip === "string") ip = ip.split(",")[0].trim();
 
       // Send to the recipient
-      if (toId) {
+      if (toId) { const msgId = Date.now().toString() + Math.random().toString(36).substring(2, 9);
         io.to(toId).emit("private_message", {
-          id: Date.now().toString(),
-          username: safeUsername,
+          id: msgId, username: safeUsername,
           text: text ? text.substring(0, 1000) : "",
           imageUrl: imageUrl || null,
+          fileUrl: fileUrl || null,
+          fileName: fileName || null,
+          profile: profile || socket.data.profile || null,
           ip: ip,
           fromId: socket.id,
           timestamp: new Date().toISOString(),
+          toId: toId,
+          isRead: toId === socket.id
         });
-        // Also send back to sender so they see it in their UI
+        if (toId !== socket.id) { // Also send back to sender so they see it in their UI
         socket.emit("private_message", {
-          id: Date.now().toString(),
-          username: safeUsername,
+          id: msgId, username: safeUsername,
           text: text ? text.substring(0, 1000) : "",
           imageUrl: imageUrl || null,
+          fileUrl: fileUrl || null,
+          fileName: fileName || null,
+          profile: profile || socket.data.profile || null,
           ip: ip,
           fromId: socket.id,
           timestamp: new Date().toISOString(),
           isSelf: true,
           toId: toId,
         });
+        }
       }
     });
 
@@ -832,7 +960,7 @@ async function startServer() {
       const username = socket.data.username || "无名小妖";
       const safeUsername = username.substring(0, 15);
 
-      if (toId) {
+      if (toId) { const msgId = Date.now().toString() + Math.random().toString(36).substring(2, 9);
         io.to(toId).emit("typing", { username: safeUsername, isTyping });
       } else {
         socket

@@ -152,10 +152,12 @@ export function DateRangeCyclePicker({ cycles, currentCycle, startDate, endDate,
  </button>
 
  {isOpen && (
- <div className="absolute top-full left-0 mt-3 p-4 light:bg-white light:shadow-sm light:bg-white light:shadow-sm bg-slate-900/90 rounded-2xl border border-sky-500/40 shadow-[0_15px_50px_rgba(0,0,0,0.9),0_0_30px_rgba(14,165,233,0.2)] z-[100] w-[460px] flex gap-5">
+ <>
+ <div className="fixed inset-0 z-[100] bg-[#02040f]/60 backdrop-blur-[2px] transition-all" onClick={() => setIsOpen(false)} />
+ <div className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 p-4 light:bg-white light:shadow-sm bg-slate-900/95 rounded-2xl border border-sky-500/40 shadow-[0_15px_50px_rgba(0,0,0,0.9),0_0_30px_rgba(14,165,233,0.2)] z-[101] w-full max-w-[460px] flex gap-5">
  
  {/* Quick Select Left Panel */}
- <div className="flex flex-col gap-2 w-[110px] border-r light:border-slate-200 border-sky-500/20 pr-4">
+ <div className="flex flex-col gap-2 w-[110px] border-r light:border-slate-200 border-sky-500/20 pr-4 shrink-0">
  <div className="text-[12px] text-sky-200/60 mb-2 font-mono tracking-widest uppercase">快捷选择</div>
  <div className="flex flex-col gap-1.5 overflow-y-auto max-h-[220px] custom-scrollbar pr-1">
  {cycles.map(c => (
@@ -232,6 +234,7 @@ export function DateRangeCyclePicker({ cycles, currentCycle, startDate, endDate,
  </div>
 
  </div>
+ </>
  )}
  </div>
  );

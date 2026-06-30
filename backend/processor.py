@@ -291,20 +291,25 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
             # Fallback to local config file if UI config is empty
             config_wb_path = None
             
-            # 优先检查应用根目录
-            for fname in ["config.xlsx", "配置.xlsx", "config.csv"]:
-                p = os.path.join(os.getcwd(), fname)
-                if os.path.exists(p):
-                    config_wb_path = p
-                    break
+            # 1. 优先检查用户上传的 source_folder 里的配置文件
+            for root, dirs, files in os.walk(source_folder):
+                for file in files:
+                    if ("config" in file.lower() or "配置" in file) and not file.startswith("~$"):
+                        config_wb_path = os.path.join(root, file)
+                        break
+                if config_wb_path: break
             
+            # 2. 如果没有，再检查应用根目录的默认模板
             if not config_wb_path:
-                for root, dirs, files in os.walk(source_folder):
-                    for file in files:
-                        if ("config" in file.lower() or "配置" in file) and not file.startswith("~$"):
-                            config_wb_path = os.path.join(root, file)
-                            break
-                    if config_wb_path: break
+                for fname in ["config.xlsx", "配置.xlsx", "config.csv"]:
+                    p = os.path.join(os.getcwd(), fname)
+                    p2 = os.path.join(os.getcwd(), "..", fname)
+                    if os.path.exists(p):
+                        config_wb_path = p
+                        break
+                    elif os.path.exists(p2):
+                        config_wb_path = p2
+                        break
                 
             if config_wb_path:
                 try:
@@ -845,7 +850,7 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                     
                     # 极速版：列表推导式
                     rider_list = [str(x).replace('.0', '').strip() for x in r_vals]
-                    date_list = [str(x)[:10] for x in d_vals]
+                    date_list = [_norm_date(x)[:10] for x in d_vals]
                     
                     col_names_str = [str(c).lower() for c in df_source.columns]
                     team_col_idx = next((i for i, c in enumerate(col_names_str) if "团队" in c), -1)
@@ -2389,7 +2394,11 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
         if '全职' in str(selected_option):
             file_prefix = f"{city}{first_date.month}月全职"
         else:
-            file_prefix = f"{city}{date_str}{selected_option}兼职"
+            opt_str = str(selected_option).replace(' 00:00:00', '')
+            file_prefix = f"{city}{date_str}{opt_str}兼职"
+            
+        import re
+        file_prefix = re.sub(r'[\\/:*?"<>|\r\n]', '-', file_prefix)
             
         ws_income["A1"] = file_prefix
 
