@@ -564,7 +564,7 @@ async def download_template():
         current_file_dir = os.path.dirname(os.path.abspath(__file__))
         project_root = os.path.dirname(current_file_dir) if os.path.basename(current_file_dir) == 'backend' else current_file_dir
 
-    template_path = os.path.abspath(os.path.join(project_root, "兼职-template.xlsx"))
+    template_path = os.path.abspath(os.path.join(project_root, "data", "兼职-template.xlsx"))
     if not os.path.exists(template_path):
         return {"success": False, "error": "Template file not found"}
     return FileResponse(template_path, filename="兼职-template.xlsx", media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")

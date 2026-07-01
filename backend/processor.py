@@ -250,6 +250,13 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
                 break
                 
         if not template_wb_path or not os.path.exists(template_wb_path): 
+            for fname in ["data/兼职-template.xlsx", "../data/兼职-template.xlsx"]:
+                p = os.path.join(os.getcwd(), fname)
+                if os.path.exists(p):
+                    template_wb_path = p
+                    break
+                    
+        if not template_wb_path or not os.path.exists(template_wb_path): 
             raise FileNotFoundError(f"致命：未在数据目录中找到 兼职-template.xlsx，请将模板与数据目录一同上传。搜索根目录: {source_folder}")
 
         # === 动态获取业务城市 (移入后续流程进行) ===
@@ -301,7 +308,7 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
             
             # 2. 如果没有，再检查应用根目录的默认模板
             if not config_wb_path:
-                for fname in ["config.xlsx", "配置.xlsx", "config.csv"]:
+                for fname in ["config.xlsx", "配置.xlsx", "config.csv", "data/config.xlsx", "../data/config.xlsx"]:
                     p = os.path.join(os.getcwd(), fname)
                     p2 = os.path.join(os.getcwd(), "..", fname)
                     if os.path.exists(p):
