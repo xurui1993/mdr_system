@@ -362,7 +362,25 @@ async function startServer() {
       const month = req.query.month as string;
       if (!month) return res.status(400).send("Month is required");
       
-      const absolutePath = path.resolve(process.cwd(), "outputs", "骑手支付绑定", month);
+      let absolutePath = path.resolve(process.cwd(), "outputs", "骑手支付绑定", month);
+      
+      if (!fs.existsSync(absolutePath)) {
+        // Find it under a year folder
+        const rootDir = path.resolve(process.cwd(), "outputs", "骑手支付绑定");
+        if (fs.existsSync(rootDir)) {
+          const years = fs.readdirSync(rootDir);
+          for (const year of years) {
+            const yearPath = path.join(rootDir, year);
+            if (fs.statSync(yearPath).isDirectory()) {
+               const potentialPath = path.join(yearPath, month);
+               if (fs.existsSync(potentialPath)) {
+                 absolutePath = potentialPath;
+                 break;
+               }
+            }
+          }
+        }
+      }
 
       if (!fs.existsSync(absolutePath)) {
         return res.status(404).send("Data for this month not found");

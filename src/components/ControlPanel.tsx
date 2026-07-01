@@ -155,12 +155,12 @@ export function ControlPanel({ theme, config, onChangeConfig, onAction, onUpload
           </div>
           
           <div className="flex items-center gap-1.5 px-3 py-1.5 mt-2 rounded-full border border-slate-700/50 light:border-slate-200 bg-slate-800/30 light:bg-slate-100/50 text-[11px] text-slate-400 font-medium">
-            <span>快捷键</span>
+            <span>支持</span>
             <div className="flex items-center gap-0.5">
               <kbd className="px-1.5 py-0.5 rounded bg-slate-700 light:bg-white border border-slate-600 light:border-slate-200 shadow-sm text-slate-300 light:text-slate-600 font-sans">↑</kbd>
               <kbd className="px-1.5 py-0.5 rounded bg-slate-700 light:bg-white border border-slate-600 light:border-slate-200 shadow-sm text-slate-300 light:text-slate-600 font-sans">↑</kbd>
             </div>
-            <span>打开弹窗</span>
+            <span>上传目录</span>
           </div>
         </div>
       </div>

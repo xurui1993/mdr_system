@@ -831,10 +831,12 @@ export default function App() {
       showToast("正在打包整个工作薄文件夹下载...", "info");
       // 获取文件夹路径：提取最后输出文件所在的目录
       if (folderPath.endsWith('.xlsx') || folderPath.endsWith('.csv')) {
-        folderPath = folderPath.substring(0, folderPath.lastIndexOf('/'));
-      }
-      if (folderPath.includes('\\')) {
-        folderPath = folderPath.substring(0, folderPath.lastIndexOf('\\'));
+        const lastSlash = Math.max(folderPath.lastIndexOf('/'), folderPath.lastIndexOf('\\'));
+        if (lastSlash > 0) {
+          folderPath = folderPath.substring(0, lastSlash);
+        } else {
+          folderPath = '';
+        }
       }
       
       const wid = getWorkspaceId();

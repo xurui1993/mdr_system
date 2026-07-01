@@ -515,7 +515,7 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
 
         output_base = os.path.abspath(os.path.join(project_root, "outputs", "兼职薪资"))
         os.makedirs(output_base, exist_ok=True)
-        out_folder = os.path.join(output_base, f"{last_date.month}月", city)
+        out_folder = os.path.join(output_base, f"{last_date.year}年", f"{last_date.month}月", city)
         stats_info["out_folder"] = out_folder
         os.makedirs(out_folder, exist_ok=True)
 

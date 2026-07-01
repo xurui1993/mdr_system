@@ -151,12 +151,14 @@ async def run_salary_bind_gen(source_path, target_path=None, base_path=None, ded
         # 提取A2单元格值
         extracted_month = "默认暂定"
         folder_month = "默认月"
+        folder_year = str(datetime.now().year) + "年"
         if not df_detail.empty and len(df_detail) > 0 and len(df_detail.columns) > 0:
             a2_val = str(df_detail.iloc[0, 0]).strip()
             try:
                 dt = pd.to_datetime(a2_val)
                 extracted_month = dt.strftime("%Y年%m月")
                 folder_month = f"{dt.month}月"
+                folder_year = f"{dt.year}年"
             except:
                 import re
                 match = re.search(r"(\d{4})[-/年]?(\d{1,2})", a2_val)
@@ -164,17 +166,21 @@ async def run_salary_bind_gen(source_path, target_path=None, base_path=None, ded
                     y, m = match.groups()
                     extracted_month = f"{y}年{int(m):02d}月"
                     folder_month = f"{int(m)}月"
+                    folder_year = f"{y}年"
                 else:
                     if len(a2_val) >= 7:
                         extracted_month = a2_val[:7].replace("/", "年").replace("-", "年") + "月"
                         try:
                             folder_month = str(int(extracted_month.split('年')[1].replace('月', ''))) + "月"
+                            folder_year = extracted_month.split('年')[0] + "年"
                         except:
                             folder_month = "默认月"
+                            folder_year = str(datetime.now().year) + "年"
         
         if extracted_month == "默认暂定":
             extracted_month = datetime.now().strftime("%Y年%m月")
             folder_month = str(datetime.now().month) + "月"
+            folder_year = str(datetime.now().year) + "年"
             yield create_log_event(f"未匹配到A2日期列，默认提取月份使用: {extracted_month}", "WARN")
         else:
             yield create_log_event(f"-> 成功提取核算月份: {extracted_month} (文件夹: {folder_month})", "INFO")
@@ -183,7 +189,7 @@ async def run_salary_bind_gen(source_path, target_path=None, base_path=None, ded
 
         # 8、导出文件
         project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        output_dir = os.path.abspath(os.path.join(project_root, "outputs", "骑手支付绑定", folder_month))
+        output_dir = os.path.abspath(os.path.join(project_root, "outputs", "骑手支付绑定", folder_year, folder_month))
         if os.path.exists(output_dir):
             import shutil
             shutil.rmtree(output_dir)
@@ -452,8 +458,8 @@ async def run_salary_bind_gen(source_path, target_path=None, base_path=None, ded
                 })
                 
                 sheets_to_write = [
-                    (sht1_name, df_sht1.drop(columns=["单量汇总"]) if "单量汇总" in df_sht1.columns else df_sht1),
-                    (sht2_name, df_sht2.drop(columns=["单量汇总"]) if "单量汇总" in df_sht2.columns else df_sht2),
+                    (sht1_name, df_sht1),
+                    (sht2_name, df_sht2),
                     ("风神绑定", df_fengshen),
                     ("天津商翼绑定", df_shangyi),
                     ("骑手信息", df_info),
@@ -529,8 +535,8 @@ async def run_salary_bind_gen(source_path, target_path=None, base_path=None, ded
                     'num_format': '0'
                 })
                 
-                for s_name, d_obj in [(sht1_name, df_city_sht1.drop(columns=["单量汇总"]) if "单量汇总" in df_city_sht1.columns else df_city_sht1), 
-                                      (sht2_name, df_city_sht2.drop(columns=["单量汇总"]) if "单量汇总" in df_city_sht2.columns else df_city_sht2)]:
+                for s_name, d_obj in [(sht1_name, df_city_sht1), 
+                                      (sht2_name, df_city_sht2)]:
                     if d_obj.empty:
                         d_obj.to_excel(city_writer, sheet_name=s_name, index=False)
                         continue

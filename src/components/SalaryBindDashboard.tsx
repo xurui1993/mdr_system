@@ -178,12 +178,13 @@ export function SalaryBindDashboard({ theme, stats, isRunning, onRun, config, on
  <div className="flex items-center justify-end gap-4 mb-6 shrink-0 bg-slate-900/60 light:bg-white p-4 rounded-xl border border-slate-700/50 light:border-slate-200 shadow-sm relative overflow-hidden">
  
  {!isRunning && config?.salaryBindSourcePath && (
-   <div className="hidden">
-     <div className="text-[12px] text-slate-400 light:text-slate-500 mb-1"></div>
-     <div className="text-[13px] font-mono text-slate-300 light:text-slate-700 truncate" title={config.salaryBindSourcePath}>
-     </div>
-   </div>
- )}
+  <div className="flex-1 flex flex-col justify-center px-2 overflow-hidden">
+    <div className="text-[12px] text-slate-400 light:text-slate-500 mb-1">目标数据源目录</div>
+    <div className="text-[13px] font-mono text-slate-300 light:text-slate-700 truncate" title={config.salaryBindSourcePath}>
+      {config.salaryBindSourcePath}
+    </div>
+  </div>
+)}
 
  {isRunning && (
  <div className="flex-1 flex flex-col justify-center px-2 relative z-10">
@@ -213,21 +214,24 @@ export function SalaryBindDashboard({ theme, stats, isRunning, onRun, config, on
  </div>
  )}
 
- <button 
-   onClick={() => onDownload && onDownload(selectedMonth)}
+ {(isRunning || (lastOutput && elapsedMs > 0)) && (
+  <button 
+    onClick={() => onDownload && onDownload(selectedMonth)}
    disabled={isRunning || cityNames.length === 0}
    className={`w-[132px] h-11 rounded-xl text-[14px] font-bold tracking-wider transition-all shrink-0 border flex items-center justify-center gap-2 relative z-10 ${isRunning || cityNames.length === 0 ? 'bg-slate-800/50 light:bg-slate-100 text-slate-500 border-slate-700/50 light:border-slate-300 cursor-not-allowed' : 'bg-slate-800/80 light:bg-slate-50 hover:bg-slate-700/80 light:hover:bg-slate-100 light:text-slate-700 text-slate-300 border-slate-700/50 light:border-slate-300 shadow-sm'}`}
  >
    <FolderDown className={`w-4 h-4 shrink-0 ${isRunning || cityNames.length === 0 ? 'text-slate-500' : 'text-emerald-400 light:text-emerald-500'}`} /> 导出目录
- </button>
+  </button>
+  )}
 
- <button onClick={() => onAction("open_source_salary_bind")} disabled={isRunning} className={`w-[132px] h-11 rounded-xl text-[14px] font-bold tracking-wider transition-all shrink-0 border flex items-center justify-center gap-2 relative z-10 ${isRunning ? 'bg-slate-800/50 light:bg-slate-100 text-slate-500 border-slate-700/50 light:border-slate-300 cursor-not-allowed' : 'bg-slate-800/80 light:bg-slate-50 hover:bg-slate-700/80 light:hover:bg-slate-100 light:text-slate-700 text-slate-300 border-slate-700/50 light:border-slate-300 shadow-sm'}`}>
+  <button onClick={() => onAction("open_source_salary_bind")} disabled={isRunning} className={`w-[132px] h-11 rounded-xl text-[14px] font-bold tracking-wider transition-all shrink-0 border flex items-center justify-center gap-2 relative z-10 ${isRunning ? 'bg-slate-800/50 light:bg-slate-100 text-slate-500 border-slate-700/50 light:border-slate-300 cursor-not-allowed' : 'bg-slate-800/80 light:bg-slate-50 hover:bg-slate-700/80 light:hover:bg-slate-100 light:text-slate-700 text-slate-300 border-slate-700/50 light:border-slate-300 shadow-sm'}`}>
  <FolderUp className={`w-4 h-4 shrink-0 ${isRunning ? 'text-slate-500' : 'text-sky-400 light:text-sky-500'}`} /> 上传目录
  </button>
 
  <button 
- onClick={onRun} 
- disabled={isRunning}
+  onClick={onRun} 
+  disabled={isRunning || !config?.salaryBindSourcePath}
+  title={!config?.salaryBindSourcePath ? "请先上传源数据目录" : ""}
  className={`w-[132px] h-11 rounded-xl text-[14px] font-bold tracking-wider flex items-center justify-center gap-2 transition-all shrink-0 shadow-sm border relative z-10 ${
  isRunning 
  ? 'bg-slate-800/50 light:bg-slate-200 text-slate-500 cursor-not-allowed border-slate-700/50 light:border-slate-300' 
