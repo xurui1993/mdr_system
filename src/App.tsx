@@ -376,7 +376,8 @@ export default function App() {
     const defaultState: AppConfig = {
       city: "",
       issueCycle: "今天",
-      sourcePath: "../uploads",
+      sourcePath: "./uploads",
+      salaryBindSourcePath: "./uploads",
       basePath: "",
       cities: [],
       issueCycles: ["今天", "本周", "上半月", "下半月", "当月"],
@@ -402,7 +403,7 @@ export default function App() {
 
   useEffect(() => {
     // Load cities from backend which reads config.xlsx
-    const configPath = appConfig.sourcePath && appConfig.sourcePath !== "./data" && appConfig.sourcePath !== "../uploads" ? appConfig.sourcePath + "/config.xlsx" : undefined;
+    const configPath = appConfig.sourcePath && appConfig.sourcePath !== "./data" && appConfig.sourcePath !== "./uploads" ? appConfig.sourcePath + "/config.xlsx" : undefined;
     
     fetchWithAuth("/api/config_excel_data", {
       method: "POST",
@@ -433,24 +434,7 @@ export default function App() {
   }, [appConfig.sourcePath]);
 
   useEffect(() => {
-    if (activeMenu === "salary_bind") {
-      fetchWithAuth("/api/config_excel_data", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ configPath: appConfig.salaryBindSourcePath && appConfig.salaryBindSourcePath !== "./data" ? appConfig.salaryBindSourcePath + "/config.xlsx" : undefined })
-      })
-      .then(res => {
-         const ct = res.headers.get("content-type");
-         if (!res.ok || !ct || !ct.includes("application/json")) throw new Error("Invalid JSON response");
-         return res.json();
-      })
-      .then(data => {
-         if (data.success && data.data) {
-            setSalaryBindStats(data.data);
-         }
-      })
-      .catch(console.error);
-    }
+    // Legacy endpoint call removed because backend doesn't support /api/config_excel_data
   }, [activeMenu, appConfig.salaryBindSourcePath, appConfig.basePath]);
 
   const isLoadedRef = React.useRef(false);
@@ -824,39 +808,43 @@ export default function App() {
     }
   };
 
-  const handleDownloadSalaryBindTable = async () => {
-    if (!lastSalaryBindOutput) {
+  const handleDownloadSalaryBindTable = async (month?: string | null) => {
+    let folderPath = lastSalaryBindOutput;
+    
+    if (!folderPath && month) {
+      // If we don't have lastSalaryBindOutput but have a month, we construct the path
+      // This assumes the backend saves it in uploads/upload_{month} or similar.
+      // Wait, we can fetch the path from history stats if possible.
+      // Actually, if we don't know the exact path on the server, we might need a dedicated API to download by month.
+      // Or we can just use the config source path. Let's send the request with month parameter.
+      const wid = getWorkspaceId();
+      window.open(`/api/salary_bind/download?workspace_id=${encodeURIComponent(wid)}&month=${encodeURIComponent(month)}`, "_blank");
+      return;
+    }
+
+    if (!folderPath) {
       showToast("未检测到生成的骑手支付绑定表，请先执行计算！", "warn");
       return;
     }
 
     try {
-      showToast("正在检索生成的绑定表...", "info");
-      const resp = await fetchWithAuth("/api/files", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ path: lastSalaryBindOutput }),
-      });
-      const data = await resp.json();
-      const files = data.files || [];
-
-      // Find the final bound sheet
-      const mainFile = files.find((f: any) => 
-        !f.is_dir && 
-        f.name.endsWith(".xlsx")
-      );
-
+      showToast("正在打包整个工作薄文件夹下载...", "info");
+      // 获取文件夹路径：提取最后输出文件所在的目录
+      if (folderPath.endsWith('.xlsx') || folderPath.endsWith('.csv')) {
+        folderPath = folderPath.substring(0, folderPath.lastIndexOf('/'));
+      }
+      if (folderPath.includes('\\')) {
+        folderPath = folderPath.substring(0, folderPath.lastIndexOf('\\'));
+      }
+      
       const wid = getWorkspaceId();
-      if (mainFile) {
-        showToast(`正在下载: ${mainFile.name}`, "success");
-        window.open(`/api/download?path=${encodeURIComponent(mainFile.path)}&workspace_id=${encodeURIComponent(wid)}`, "_blank");
+      if (month && month !== 'latest') {
+          window.open(`/api/salary_bind/download?workspace_id=${encodeURIComponent(wid)}&month=${encodeURIComponent(month)}`, "_blank");
       } else {
-        showToast("未找到单独的 Excel 文件，正打包整个文件夹下载...", "info");
-        window.open(`/api/download?path=${encodeURIComponent(lastSalaryBindOutput)}&workspace_id=${encodeURIComponent(wid)}`, "_blank");
+          window.open(`/api/download?path=${encodeURIComponent(folderPath)}&workspace_id=${encodeURIComponent(wid)}`, "_blank");
       }
     } catch (err) {
-      const wid = getWorkspaceId();
-      window.open(`/api/download?path=${encodeURIComponent(lastSalaryBindOutput)}&workspace_id=${encodeURIComponent(wid)}`, "_blank");
+      showToast("下载过程发生异常", "error");
     }
   };
 
@@ -1108,7 +1096,7 @@ export default function App() {
     } else if (action === "open_explorer") {
       try {
         const targetPath =
-          activeTab === "task" ? appConfig.sourcePath : "../outputs";
+          activeTab === "task" ? appConfig.sourcePath : "./outputs";
         const resp = await fetchWithAuth(`/api/open/explorer`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },

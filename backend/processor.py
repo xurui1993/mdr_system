@@ -513,7 +513,7 @@ def process_rider_data(city, selected_option, source_folder, base_path, log_call
         log(f"历史快照读取完毕，缓冲池包含 {apply_riders_count} 个活动实体（拦截日志记录 {len(valid_riders_dates)} 次）！")
         progress_callback(0.15, "历史快照读取完毕，缓冲池已建立...")
 
-        output_base = os.path.abspath(os.path.join(project_root, "..", "outputs", "兼职薪资"))
+        output_base = os.path.abspath(os.path.join(project_root, "outputs", "兼职薪资"))
         os.makedirs(output_base, exist_ok=True)
         out_folder = os.path.join(output_base, f"{last_date.month}月", city)
         stats_info["out_folder"] = out_folder

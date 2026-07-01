@@ -41,6 +41,31 @@ async def run_salary_bind_gen(source_path, target_path=None, base_path=None, ded
                 if f.lower().endswith(('.xlsx', '.csv')) and not f.startswith('~$'):
                     files.append(os.path.join(root, f))
         
+        if not files:
+            yield create_log_event(">>> [错误] 目标目录未检测到任何有效的 Excel 或 CSV 文件！请先在界面上[选择目录]或[上传目录]后再试。", "ERROR")
+            yield create_finish_event("error", "目标目录为空，未检测到任何可处理的表格文件。")
+            return
+
+        # 检查是否包含所需的核算表格文件
+        relevant_keywords = ["骑手绑定", "收薪账户", "骑手信息", "骑手数据明细", "merchantFreelancer", "薪资代领", "天津商翼"]
+        has_relevant_files = False
+        for f in files:
+            fname = os.path.basename(f)
+            if any(kw in fname for kw in relevant_keywords):
+                has_relevant_files = True
+                break
+        
+        if not has_relevant_files:
+            yield create_log_event(">>> [错误] 目标目录内未检测到任何与发薪工具绑定核算相关的表格文件！", "ERROR")
+            yield create_log_event("请确保你选择的目录中包含以下核算文件之一：", "WARN")
+            yield create_log_event(" 1. 含有「骑手绑定」或「收薪账户」的文件 (风神绑定)", "WARN")
+            yield create_log_event(" 2. 含有「骑手信息」的文件 (基本资料)", "WARN")
+            yield create_log_event(" 3. 含有「骑手数据明细」的文件 (单量明细)", "WARN")
+            yield create_log_event(" 4. 含有「merchantFreelancer」或「天津商翼」的文件 (商翼绑定)", "WARN")
+            yield create_log_event(" 5. 含有「薪资代领」的文件 (代领明细)", "WARN")
+            yield create_finish_event("error", "未检测到符合发薪绑定业务的有效数据表格")
+            return
+        
         list_fengshen = []
         list_shangyi = []
         list_info = []
@@ -61,9 +86,12 @@ async def run_salary_bind_gen(source_path, target_path=None, base_path=None, ded
                         df = pd.read_csv(file_path, dtype=str, encoding='gbk')
                 else:
                     try:
-                        df = pd.read_excel(file_path, dtype=str, engine="calamine")
+                        df = pd.read_excel(file_path, engine="calamine")
                     except:
-                        df = pd.read_excel(file_path, dtype=str)
+                        df = pd.read_excel(file_path)
+                
+                if not df.empty:
+                    df = df.dropna(how='all')
                 df.columns = [str(c).strip() for c in df.columns]
                 return (filename, df, None)
             except Exception as e:
@@ -127,25 +155,25 @@ async def run_salary_bind_gen(source_path, target_path=None, base_path=None, ded
             a2_val = str(df_detail.iloc[0, 0]).strip()
             try:
                 dt = pd.to_datetime(a2_val)
-                extracted_month = dt.strftime("%Y-%m月")
+                extracted_month = dt.strftime("%Y年%m月")
                 folder_month = f"{dt.month}月"
             except:
                 import re
                 match = re.search(r"(\d{4})[-/年]?(\d{1,2})", a2_val)
                 if match:
                     y, m = match.groups()
-                    extracted_month = f"{y}-{int(m):02d}月"
+                    extracted_month = f"{y}年{int(m):02d}月"
                     folder_month = f"{int(m)}月"
                 else:
                     if len(a2_val) >= 7:
-                        extracted_month = a2_val[:7].replace("/", "-") + "月"
+                        extracted_month = a2_val[:7].replace("/", "年").replace("-", "年") + "月"
                         try:
-                            folder_month = str(int(extracted_month.split('-')[1].replace('月', ''))) + "月"
+                            folder_month = str(int(extracted_month.split('年')[1].replace('月', ''))) + "月"
                         except:
                             folder_month = "默认月"
         
         if extracted_month == "默认暂定":
-            extracted_month = datetime.now().strftime("%Y-%m月")
+            extracted_month = datetime.now().strftime("%Y年%m月")
             folder_month = str(datetime.now().month) + "月"
             yield create_log_event(f"未匹配到A2日期列，默认提取月份使用: {extracted_month}", "WARN")
         else:
@@ -155,10 +183,14 @@ async def run_salary_bind_gen(source_path, target_path=None, base_path=None, ded
 
         # 8、导出文件
         project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        output_dir = os.path.abspath(os.path.join(project_root, "..", "outputs", "骑手支付绑定", folder_month))
-        if not os.path.exists(output_dir):
-            os.makedirs(output_dir)
-        output_file = os.path.join(output_dir, f"{extracted_month}骑手支付绑定.xlsx")
+        output_dir = os.path.abspath(os.path.join(project_root, "outputs", "骑手支付绑定", folder_month))
+        if os.path.exists(output_dir):
+            import shutil
+            shutil.rmtree(output_dir)
+        os.makedirs(output_dir)
+        
+        today_str = datetime.now().strftime('%m%d')
+        output_file = os.path.join(output_dir, f"(汇总){extracted_month}骑手支付绑定{today_str}.xlsx")
         
         sht1_name = f"{extracted_month}骑手绑定情况"
         sht2_name = f"{extracted_month}未绑名单"
@@ -255,7 +287,7 @@ async def run_salary_bind_gen(source_path, target_path=None, base_path=None, ded
 
         # 3. df_info matching
         info_id_col = get_col(df_info, ["骑手ID"]) if not df_info.empty else None
-        info_idcard_col = get_col(df_info, ["身份证号"]) if not df_info.empty else None
+        info_idcard_col = get_col(df_info, ["身份证", "身份证号", "身份证号码", "骑手身份证"]) if not df_info.empty else None
         info_phone_col = get_col(df_info, ["手机号"]) if not df_info.empty else None
         info_name_col = get_col(df_info, ["骑手姓名"]) if not df_info.empty else None
         info_team_col = get_col(df_info, ["团队名称"]) if not df_info.empty else None
@@ -284,7 +316,7 @@ async def run_salary_bind_gen(source_path, target_path=None, base_path=None, ded
             fs_bound_set = set(valid_fs[(valid_fs != "") & (valid_fs != "nan")])
         
         # 5. df_shangyi matching
-        sy_idcard_col = get_col(df_shangyi, ["身份证号"]) if not df_shangyi.empty else None
+        sy_idcard_col = get_col(df_shangyi, ["身份证", "身份证号", "身份证号码", "分包骑手证件号码", "证件号码"]) if not df_shangyi.empty else None
         sy_status_col = get_col(df_shangyi, ["状态"]) if not df_shangyi.empty else None
         sy_bound_set = set()
         if sy_idcard_col and sy_status_col and not df_shangyi.empty:
@@ -320,7 +352,7 @@ async def run_salary_bind_gen(source_path, target_path=None, base_path=None, ded
             df_dailing_filtered = df_dailing[cond1 & cond2 & cond3].copy()
             df_dailing = df_dailing_filtered
             
-            dailing_idcard_col = get_col(df_dailing, ["打款人身份证号码"])
+            dailing_idcard_col = get_col(df_dailing, ["身份证", "身份证号", "身份证号码", "打款人身份证号码", "骑手身份证"])
             if dailing_idcard_col:
                 valid_dl = df_dailing[dailing_idcard_col].astype(str).str.strip().str.upper()
                 dailing_rid_set = set(valid_dl[(valid_dl != "") & (valid_dl != "NAN")])
@@ -436,14 +468,19 @@ async def run_salary_bind_gen(source_path, target_path=None, base_path=None, ded
                         continue
                     
                     df_obj.to_excel(writer, sheet_name=sheet_name, index=False)
-                    ws = writer.sheets[sheet_name]
                     
-                    for i, col in enumerate(df_obj.columns):
-                        is_id = "ID" in str(col).upper()
-                        ws.set_column(i, i, 16 if is_id else 14, id_num_format if is_id else cell_format)
-                    
-                    # 写入表头，使用指定的格式
-                    ws.write_row(0, 0, df_obj.columns.values, header_format)
+                    # Only apply formatting to the generated result sheets to save time and memory
+                    if sheet_name in (sht1_name, sht2_name):
+                        ws = writer.sheets.get(sheet_name)
+                        if ws:
+                            try:
+                                for i, col in enumerate(df_obj.columns):
+                                    is_id = "ID" in str(col).upper()
+                                    ws.set_column(i, i, 16 if is_id else 14, id_num_format if is_id else cell_format)
+                                # 写入表头，使用指定的格式
+                                ws.write_row(0, 0, df_obj.columns.values, header_format)
+                            except Exception:
+                                pass
                                 
             return True
 
@@ -499,13 +536,17 @@ async def run_salary_bind_gen(source_path, target_path=None, base_path=None, ded
                         continue
                         
                     d_obj.to_excel(city_writer, sheet_name=s_name, index=False)
-                    ws = city_writer.sheets[s_name]
+                    ws = city_writer.sheets.get(s_name)
                     
-                    for i, col in enumerate(d_obj.columns):
-                        is_id = "ID" in str(col).upper()
-                        ws.set_column(i, i, 16 if is_id else 14, c_id_num_format if is_id else c_cell_format)
-                    
-                    ws.write_row(0, 0, d_obj.columns.values, c_header_format)
+                    if ws:
+                        try:
+                            for i, col in enumerate(d_obj.columns):
+                                is_id = "ID" in str(col).upper()
+                                ws.set_column(i, i, 16 if is_id else 14, c_id_num_format if is_id else c_cell_format)
+                            
+                            ws.write_row(0, 0, d_obj.columns.values, c_header_format)
+                        except Exception:
+                            pass
                     
             return city_wb_name
 
@@ -515,8 +556,14 @@ async def run_salary_bind_gen(source_path, target_path=None, base_path=None, ded
             def _write_all_cities():
                 # 处理逻辑：将处理完毕的数据格式化后输出写入到外部Excel或CSV文件
                 results = []
-                for city in valid_cities:
-                    results.append(_write_city_wb(city))
+                import concurrent.futures
+                with concurrent.futures.ThreadPoolExecutor(max_workers=8) as exc:
+                    futures = {exc.submit(_write_city_wb, city): city for city in valid_cities}
+                    for future in concurrent.futures.as_completed(futures):
+                        try:
+                            results.append(future.result())
+                        except Exception as e:
+                            print(f"Error writing city workbook: {e}")
                 return results
 
             city_results = await loop.run_in_executor(None, _write_all_cities)
@@ -582,7 +629,8 @@ async def run_salary_bind_gen(source_path, target_path=None, base_path=None, ded
 
             stats_data = {
                 "overall": overall_stats,
-                "cities": city_stats
+                "cities": city_stats,
+                "month": folder_month
             }
             
             # Save to json file

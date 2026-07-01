@@ -154,7 +154,7 @@ async function startServer() {
 
   app.get("/api/default_paths", (req, res) => {
     let configPath = path.resolve("data/config.xlsx");
-    let dataPath = path.resolve("../uploads");
+    let dataPath = path.resolve("./uploads");
 
     res.json({
       configPath: configPath,
@@ -338,7 +338,7 @@ async function startServer() {
   const storage = multer.diskStorage({
     destination: (req, file, cb) => {
       const wid = getWorkspaceId(req);
-      const dir = path.join(process.cwd(), "..", "uploads", wid);
+      const dir = path.join(process.cwd(), "uploads", wid);
       if (!fs.existsSync(dir)) {
         fs.mkdirSync(dir, { recursive: true });
       }
@@ -356,6 +356,37 @@ async function startServer() {
     },
   });
   const upload = multer({ storage });
+
+  app.get("/api/salary_bind/download", (req, res) => {
+    try {
+      const month = req.query.month as string;
+      if (!month) return res.status(400).send("Month is required");
+      
+      const absolutePath = path.resolve(process.cwd(), "outputs", "骑手支付绑定", month);
+
+      if (!fs.existsSync(absolutePath)) {
+        return res.status(404).send("Data for this month not found");
+      }
+
+      const stat = fs.statSync(absolutePath);
+      if (stat.isDirectory()) {
+        const zip = new AdmZip();
+        zip.addLocalFolder(absolutePath);
+        const zipBuffer = zip.toBuffer();
+        res.set("Content-Type", "application/zip");
+        res.set(
+          "Content-Disposition",
+          `attachment; filename="${encodeURIComponent(month + "_骑手支付绑定")}.zip"`,
+        );
+        res.send(zipBuffer);
+      } else {
+        res.status(400).send("Not a directory");
+      }
+    } catch (e) {
+      console.error(e);
+      res.status(500).send(e.toString());
+    }
+  });
 
   app.get("/api/download", (req, res) => {
     try {
@@ -453,7 +484,7 @@ async function startServer() {
       }
       
       const wid = getWorkspaceId(req);
-      const rootOutputs = path.join(process.cwd(), "..", "outputs");
+      const rootOutputs = path.join(process.cwd(), "outputs");
       if (!fs.existsSync(rootOutputs)) fs.mkdirSync(rootOutputs, { recursive: true });
       
       const targetDir = path.join(rootOutputs, wid);
@@ -509,7 +540,6 @@ async function startServer() {
         // Also save data in wid specific folder
         const targetDir = path.join(
           process.cwd(),
-          "..",
           "uploads",
           wid,
           `upload_${getUploadSequence(wid)}`,
@@ -537,8 +567,13 @@ async function startServer() {
       }
       
       // Auto-create predefined default external directories if they don't exist
-      if ((qPath === '../outputs' || qPath === '../uploads') && !fs.existsSync(qPath)) {
+      if ((qPath === './outputs' || qPath === './uploads') && !fs.existsSync(qPath)) {
         fs.mkdirSync(qPath, { recursive: true });
+        if (qPath === './outputs') {
+          fs.mkdirSync(path.join(qPath, "问题单生成"), { recursive: true });
+          fs.mkdirSync(path.join(qPath, "兼职薪资"), { recursive: true });
+          fs.mkdirSync(path.join(qPath, "骑手支付绑定"), { recursive: true });
+        }
       }
 
       if (!fs.existsSync(qPath)) {
@@ -711,7 +746,7 @@ async function startServer() {
     const now = Date.now();
     const dirsToClean = [
       path.join(process.cwd(), "data"),
-      path.join(process.cwd(), "..", "uploads"),
+      path.join(process.cwd(), "uploads"),
     ];
     let deletedCount = 0;
 

@@ -27,7 +27,7 @@ const MENU_LABELS: Record<string, string> = {
 
 export function Header({ theme, activeMenu = 'dashboard', onAction, appTheme = 'dark', onToggleTheme, userProfile, onEditProfile }: HeaderProps) {
   return (
-    <header className="h-[72px] flex items-center justify-between px-6 border-b border-slate-800/50 light:border-slate-200/50 shrink-0 bg-[#020410]/80 light:bg-white/80 backdrop-blur-xl relative z-10 transition-colors">
+    <header className="h-[72px] flex items-center justify-between px-6 border-b border-slate-800/50 light:border-slate-200/60 shrink-0 bg-[#020410]/80 light:bg-slate-100/90 backdrop-blur-xl relative z-10 transition-colors">
       <div className="flex items-center gap-4">
         {/* Breadcrumb / Title with new styling */}
         <div className="flex items-center gap-3">

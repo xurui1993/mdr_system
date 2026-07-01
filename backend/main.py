@@ -157,7 +157,7 @@ with open(r"{tmp_path}", "w", encoding="utf-8") as f:
 @app.get("/api/default_paths")
 def get_default_paths():
     # 处理逻辑：获取并返回所需的系统状态或计算数据
-    return {"configPath": "../data/config.xlsx", "dataPath": "../uploads"}
+    return {"configPath": "./data/config.xlsx", "dataPath": "./uploads"}
 
 @app.post("/api/open/config")
 def open_config(req: FileRequest):
@@ -170,7 +170,7 @@ def open_config(req: FileRequest):
         current_file_dir = os.path.dirname(os.path.abspath(__file__))
         project_root = os.path.dirname(current_file_dir) if os.path.basename(current_file_dir) == 'backend' else current_file_dir
         
-    config_file = os.path.join(project_root, "../data/config.xlsx")
+    config_file = os.path.join(project_root, "data/config.xlsx")
 
     if os.path.exists(config_file):
         try:

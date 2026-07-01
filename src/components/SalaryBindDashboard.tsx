@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Theme, AppConfig } from '../types';
 import { motion } from 'motion/react';
-import { Zap, Folder, Download, Landmark, Navigation, Building, Building2, Castle, Compass, Map as MapIcon, MapPin, Mountain, Tent, Trees, TreePine, Waves, Anchor, Ship, Train, Plane, Car, Bus, Palmtree, Snowflake, Sun, Moon, Cloud, Umbrella, Star, MapPinned, Flag, Rocket } from 'lucide-react';
+import { Zap, Play, FolderUp, FolderDown, Download, Landmark, Navigation, Building, Building2, Castle, Compass, Map as MapIcon, MapPin, Mountain, Tent, Trees, TreePine, Waves, Anchor, Ship, Train, Plane, Car, Bus, Palmtree, Snowflake, Sun, Moon, Cloud, Umbrella, Star, MapPinned, Flag, Rocket } from 'lucide-react';
 
 interface StationStats {
  station_name: string;
@@ -22,6 +22,7 @@ interface CityStats {
 }
 
 export interface SalaryBindStatsData {
+ month?: string;
  overall: {
  total_riders: number;
  total_orders: number;
@@ -46,7 +47,7 @@ interface Props {
  progress?: number;
  progressText?: string;
  lastOutput?: string | null;
- onDownload?: () => void;
+ onDownload?: (month: string | null) => void;
 }
 
 const EMPTY_STATS: SalaryBindStatsData = {
@@ -63,28 +64,21 @@ export function SalaryBindDashboard({ theme, stats, isRunning, onRun, config, on
  const [selectedCity, setSelectedCity] = useState<string>('业务城市');
  const [elapsedMs, setElapsedMs] = useState(0);
 
- const hoverTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
- const handleMouseEnter = useCallback((city: string) => {
-   if (hoverTimeoutRef.current) {
-     clearTimeout(hoverTimeoutRef.current);
+ useEffect(() => {
+   if (stats && !isRunning) {
+     setSelectedMonth('latest');
    }
-   hoverTimeoutRef.current = setTimeout(() => {
-     setSelectedCity(city);
-   }, 200);
- }, []);
-
- const handleMouseLeave = useCallback(() => {
-   if (hoverTimeoutRef.current) {
-     clearTimeout(hoverTimeoutRef.current);
-   }
- }, []);
+ }, [stats, isRunning]);
 
  const [historyStats, setHistoryStats] = useState<{month: string, stats: SalaryBindStatsData, mtime: number}[]>([]);
  const [selectedMonth, setSelectedMonth] = useState<string | null>(null);
 
  const fetchHistory = useCallback(() => {
-   fetch('/api/salary_bind/stats')
+   const wid = new URLSearchParams(window.location.search).get('workspace_id') || localStorage.getItem('workspace_id');
+   const u = new URL('/api/salary_bind/stats', window.location.origin);
+   if (wid) u.searchParams.set('workspace_id', wid);
+   
+   fetch(u.toString())
      .then(res => res.json())
      .then(data => {
        if (data.code === 0 && data.data) {
@@ -144,20 +138,34 @@ export function SalaryBindDashboard({ theme, stats, isRunning, onRun, config, on
  return `${minutes}:${seconds}.${centiseconds}`;
  };
 
- const displayStats = selectedMonth && selectedMonth !== 'latest'
-   ? historyStats.find(h => h.month === selectedMonth)?.stats || EMPTY_STATS
-   : (stats || (historyStats.length > 0 ? historyStats[0].stats : EMPTY_STATS));
+ const rawStats = selectedMonth && selectedMonth !== 'latest'
+   ? historyStats.find(h => h.month === selectedMonth)?.stats
+   : stats;
    
- const cityNames = Object.keys(displayStats.cities);
+ const displayStats: SalaryBindStatsData = {
+   overall: rawStats?.overall || EMPTY_STATS.overall,
+   cities: rawStats?.cities || EMPTY_STATS.cities,
+   month: rawStats?.month
+ };
  
- const StatCard = ({ title, value, unit, highlight }: { title: string, value: string | number, unit?: string, highlight?: boolean }) => (
+ const cityNames = Object.keys(displayStats.cities);
+
+ useEffect(() => {
+   if (cityNames.length > 0 && selectedCity !== '业务城市' && !cityNames.includes(selectedCity)) {
+     setSelectedCity('业务城市');
+   } else if (cityNames.length === 0 && selectedCity !== '业务城市') {
+     setSelectedCity('业务城市');
+   }
+ }, [cityNames, selectedCity]);
+ 
+ const StatCard = ({ title, value, highlight }: { title: string, value: string | number, unit?: string, highlight?: boolean }) => (
  <div className={`p-5 rounded-xl border ${highlight ? 'bg-indigo-500/10 light:bg-indigo-50 border-indigo-500/20 light:border-indigo-100' : 'bg-slate-900/40 light:bg-white border-slate-700/50 light:border-slate-200'} flex flex-col justify-center relative overflow-hidden transition-all duration-200`}>
  <div className="text-[13px] text-slate-400 light:text-slate-500 font-bold tracking-widest mb-3 relative z-10 flex items-center gap-2">
  {highlight && <div className="w-1.5 h-1.5 rounded-full bg-indigo-500"></div>}
  {title}
  </div>
  <div className={`text-4xl font-black font-mono tracking-tight relative z-10 ${highlight ? 'text-indigo-400 light:text-indigo-600' : 'text-slate-100 light:text-slate-800 font-medium'}`}>
- {value} <span className="text-[16px] text-slate-500 light:text-slate-400 font-bold ml-1">{unit}</span>
+ {value}
  </div>
  </div>
  );
@@ -167,74 +175,66 @@ export function SalaryBindDashboard({ theme, stats, isRunning, onRun, config, on
  <div className="relative z-10 flex flex-col h-full">
  {/* Controls Section */}
  {config && onAction && onRun && (
- <div className="flex items-center gap-4 mb-6 shrink-0 bg-slate-900/60 light:bg-white p-4 rounded-xl border border-slate-700/50 light:border-slate-200 shadow-sm relative overflow-hidden">
+ <div className="flex items-center justify-end gap-4 mb-6 shrink-0 bg-slate-900/60 light:bg-white p-4 rounded-xl border border-slate-700/50 light:border-slate-200 shadow-sm relative overflow-hidden">
  
- <div className="flex-1 flex flex-col justify-center px-4 relative z-10 h-11">
- {isRunning ? (
- <div className="flex flex-col gap-1.5 w-full animate-in fade-in duration-500 bg-slate-800/40 light:bg-slate-100/60 p-2.5 rounded-lg border border-slate-700/30 light:border-slate-300/30">
- <div className="flex justify-between items-end text-[12px] font-bold text-sky-400 light:text-sky-600 tracking-wider">
- <span className="truncate pr-4 opacity-80">{progressText || '正在处理中...'}</span>
- <span className="font-mono text-[13px]">{progress || 0}%</span>
+ {!isRunning && config?.salaryBindSourcePath && (
+   <div className="hidden">
+     <div className="text-[12px] text-slate-400 light:text-slate-500 mb-1"></div>
+     <div className="text-[13px] font-mono text-slate-300 light:text-slate-700 truncate" title={config.salaryBindSourcePath}>
+     </div>
+   </div>
+ )}
+
+ {isRunning && (
+ <div className="flex-1 flex flex-col justify-center px-2 relative z-10">
+ <div className="flex flex-col gap-1.5 w-full animate-in fade-in duration-500">
+ <div className="flex justify-between items-center text-[12px] font-bold text-sky-400 light:text-sky-600 tracking-wider">
+ <div className="flex items-center gap-2 truncate pr-4 opacity-90">
+   <span>{progressText || '正在处理中...'}</span>
+   <span className="font-mono text-[11px] bg-sky-500/10 border border-sky-500/20 px-2 py-0.5 rounded text-sky-400 light:text-sky-600 shrink-0">
+     已用时: {formatStopwatch(elapsedMs)}
+   </span>
  </div>
- <div className="h-2 w-full bg-slate-950/60 light:bg-slate-200 rounded-full overflow-hidden border border-slate-800/50 light:border-slate-300">
- <div className="h-full bg-gradient-to-r from-sky-400 via-indigo-500 to-purple-500 transition-all duration-300 relative" style={{ width: `${progress || 0}%` }}>
- <div className="absolute top-0 right-0 bottom-0 left-0 bg-[linear-gradient(45deg,transparent_25%,rgba(255,255,255,0.2)_50%,transparent_75%,transparent_100%)] bg-[length:20px_20px] animate-[shimmer_1s_linear_infinite]" />
+ <span className="font-mono text-[13px] shrink-0">{progress || 0}%</span>
+ </div>
+ <div className="h-1.5 w-full bg-slate-800/60 light:bg-slate-200 rounded-full overflow-hidden">
+ <div className="h-full bg-sky-500 transition-all duration-300" style={{ width: `${progress || 0}%` }}></div>
  </div>
  </div>
- </div>
- ) : (
- <div className="flex items-center justify-start h-full w-full">
- <span className="text-[13px] font-medium tracking-wide flex items-center gap-2 truncate text-slate-400 light:text-slate-500 bg-slate-800/20 light:bg-slate-100/40 px-3 py-1.5 rounded-md">
- <div className={`w-2 h-2 rounded-full shrink-0 ${config.salaryBindSourcePath ? 'bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)] animate-pulse' : 'bg-slate-600 light:bg-slate-400'}`} />
- <span className="truncate">{config.salaryBindSourcePath ? `数据源已就绪: ${config.salaryBindSourcePath.split('/').pop() || config.salaryBindSourcePath}` : '准备就绪 / 等待选择数据源'}</span>
- </span>
  </div>
  )}
- </div>
  
- { (isRunning || elapsedMs > 0) && (
- <div className="flex items-center gap-4 shrink-0 h-11 px-6 bg-slate-950/60 light:bg-slate-50 rounded-lg border border-slate-700/50 light:border-slate-200 shadow-sm relative z-10">
- <span className="relative flex h-2.5 w-2.5">
- <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${isRunning ? 'bg-purple-400' : 'bg-emerald-400'}`}></span>
- <span className={`relative inline-flex rounded-full h-2.5 w-2.5 ${isRunning ? 'bg-purple-500' : 'bg-emerald-500'}`}></span>
- </span>
- <span className="text-slate-200 light:text-slate-800 font-mono text-[16px] font-bold tracking-widest min-w-[75px] text-center">
- {formatStopwatch(elapsedMs)}
+ { (lastOutput && !isRunning && elapsedMs > 0) && (
+ <div className="flex items-center gap-3 shrink-0 h-11 px-5 bg-slate-800/40 light:bg-slate-50 rounded-lg border border-slate-700/50 light:border-slate-200 shadow-sm relative z-10">
+ <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
+ <span className="text-slate-300 light:text-slate-700 font-mono text-[14px] font-bold tracking-wider">
+ 耗时 {formatStopwatch(elapsedMs)}
  </span>
  </div>
  )}
 
- {lastOutput && !isRunning && (
-  <button 
-    onClick={onDownload}
-    className="h-11 px-6 rounded-xl font-bold tracking-wider flex items-center justify-center gap-2 transition-all shrink-0 border relative overflow-hidden z-10 bg-emerald-500/10 hover:bg-emerald-500/20 border-emerald-500/30 text-emerald-400 light:bg-emerald-50 light:hover:bg-emerald-100 light:text-emerald-600 shadow-sm"
-  >
-    <Download className="w-4 h-4" /> 导出结果
-  </button>
- )}
+ <button 
+   onClick={() => onDownload && onDownload(selectedMonth)}
+   disabled={isRunning || cityNames.length === 0}
+   className={`w-[132px] h-11 rounded-xl text-[14px] font-bold tracking-wider transition-all shrink-0 border flex items-center justify-center gap-2 relative z-10 ${isRunning || cityNames.length === 0 ? 'bg-slate-800/50 light:bg-slate-100 text-slate-500 border-slate-700/50 light:border-slate-300 cursor-not-allowed' : 'bg-slate-800/80 light:bg-slate-50 hover:bg-slate-700/80 light:hover:bg-slate-100 light:text-slate-700 text-slate-300 border-slate-700/50 light:border-slate-300 shadow-sm'}`}
+ >
+   <FolderDown className={`w-4 h-4 shrink-0 ${isRunning || cityNames.length === 0 ? 'text-slate-500' : 'text-emerald-400 light:text-emerald-500'}`} /> 导出目录
+ </button>
 
- <button onClick={() => onAction("open_source_salary_bind")} disabled={isRunning} className={`px-5 h-11 rounded-lg text-[14px] font-bold transition-all shrink-0 border flex items-center gap-2 relative z-10 ${isRunning ? 'bg-slate-800/50 light:bg-slate-100 text-slate-500 border-slate-700/50 light:border-slate-300 cursor-not-allowed' : 'bg-slate-800/80 light:bg-slate-50 hover:bg-slate-700/80 light:hover:bg-slate-100 light:text-slate-700 text-slate-300 border-slate-700/50 light:border-slate-300 shadow-sm'}`}>
- <Folder className="w-4 h-4" /> 选择目录
+ <button onClick={() => onAction("open_source_salary_bind")} disabled={isRunning} className={`w-[132px] h-11 rounded-xl text-[14px] font-bold tracking-wider transition-all shrink-0 border flex items-center justify-center gap-2 relative z-10 ${isRunning ? 'bg-slate-800/50 light:bg-slate-100 text-slate-500 border-slate-700/50 light:border-slate-300 cursor-not-allowed' : 'bg-slate-800/80 light:bg-slate-50 hover:bg-slate-700/80 light:hover:bg-slate-100 light:text-slate-700 text-slate-300 border-slate-700/50 light:border-slate-300 shadow-sm'}`}>
+ <FolderUp className={`w-4 h-4 shrink-0 ${isRunning ? 'text-slate-500' : 'text-sky-400 light:text-sky-500'}`} /> 上传目录
  </button>
 
  <button 
  onClick={onRun} 
  disabled={isRunning}
- className={`h-11 px-8 rounded-xl font-bold tracking-widest flex items-center justify-center gap-3 transition-all shrink-0 border relative overflow-hidden z-10 ${
+ className={`w-[132px] h-11 rounded-xl text-[14px] font-bold tracking-wider flex items-center justify-center gap-2 transition-all shrink-0 shadow-sm border relative z-10 ${
  isRunning 
- ? 'bg-slate-800/50 light:bg-slate-100 text-slate-500 border-slate-700/50 light:border-slate-300 cursor-not-allowed' 
- : 'bg-gradient-to-r from-sky-600 to-sky-500 light:from-white light:to-white light:text-slate-700 text-white border-sky-400 light:border-slate-200 hover:from-sky-500 hover:to-sky-400 light:hover:from-slate-50 light:hover:to-slate-50 shadow-[0_0_20px_rgba(14,165,233,0.4)] light:shadow-sm'
+ ? 'bg-slate-800/50 light:bg-slate-200 text-slate-500 cursor-not-allowed border-slate-700/50 light:border-slate-300' 
+ : 'bg-slate-200 light:bg-sky-500 hover:bg-white light:hover:bg-sky-600 text-slate-800 light:text-white border-transparent'
  }`}
  >
- {isRunning && (
- <div 
- className="absolute left-0 top-0 h-full bg-gradient-to-r from-sky-500/30 to-purple-500/30 transition-all duration-300"
- style={{ width: `${progress || 0}%` }}
- />
- )}
- <span className="relative z-10 flex items-center gap-2">
- {isRunning ? <><Zap className="w-5 h-5 animate-pulse text-purple-400" /> 执行中</> : <><Zap className="w-5 h-5" /> 启动绑定任务</>}
- </span>
+ {isRunning ? <><Play className="w-4 h-4 shrink-0 animate-pulse text-sky-500" /> 执行中...</> : <><Play className="w-4 h-4 shrink-0" /> 启动任务</>}
  </button>
  </div>
  )}
@@ -243,42 +243,40 @@ export function SalaryBindDashboard({ theme, stats, isRunning, onRun, config, on
  <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-6 shrink-0 relative">
  <div className="flex-1 flex gap-2 p-1.5 rounded-xl bg-slate-900/60 border light:border-slate-200 border-white/5 w-0 overflow-x-auto no-scrollbar shadow-inner after:content-[''] after:w-2 after:block after:shrink-0">
  <button
-  onMouseEnter={() => handleMouseEnter('业务城市')}
- onMouseLeave={handleMouseLeave}
+  onClick={() => setSelectedCity('业务城市')}
  className={`shrink-0 px-6 py-2 min-h-[38px] flex items-center justify-center rounded-lg font-bold tracking-widest text-[13px] transition-all whitespace-nowrap ${
  selectedCity === '业务城市'
  ? 'bg-sky-500/20 text-sky-200 border border-sky-500/30 shadow-[0_0_15px_rgba(14,165,233,0.15)] drop-shadow-md'
  : 'bg-transparent border border-transparent light:text-slate-700 text-slate-400 hover:light:text-sky-700 text-sky-300 light:hover:bg-black/5 hover:bg-white/5 hover:border-white/10'
  }`}
  >
- 业务城市 ({cityNames.length})
+ 业务城市
  </button>
  {cityNames.map(city => (
  <button
  key={city}
- onMouseEnter={() => handleMouseEnter(city)}
- onMouseLeave={handleMouseLeave}
+ onClick={() => setSelectedCity(city)}
  className={`shrink-0 px-6 py-2 min-h-[38px] flex items-center justify-center rounded-lg font-bold tracking-widest text-[13px] transition-all whitespace-nowrap ${
  selectedCity === city
  ? 'bg-sky-500/20 text-sky-200 border border-sky-500/30 shadow-[0_0_15px_rgba(14,165,233,0.15)] drop-shadow-md'
  : 'bg-transparent border border-transparent light:text-slate-700 text-slate-400 hover:light:text-sky-700 text-sky-300 light:hover:bg-black/5 hover:bg-white/5 hover:border-white/10'
  }`}
  >
- {city} {displayStats.cities[city]?.total_orders > 0 ? `(${displayStats.cities[city].total_orders})` : ''}
+ {city}
  </button>
  ))}
  </div>
  <div className="flex items-center gap-3 shrink-0">
  <div className="flex items-center gap-2 text-[12px] light:text-indigo-600 text-indigo-300 font-bold tracking-widest bg-indigo-500/10 px-4 py-1.5 rounded-lg border light:border-indigo-200 border-indigo-500/30 shadow-[0_0_10px_rgba(99,102,241,0.15)] relative group cursor-pointer">
-   <span>绑定月份: {selectedMonth === 'latest' ? '当前 (最新)' : (selectedMonth || (config?.issueCycle || '无数据'))}</span>
+   <span>绑定月份: {selectedMonth === 'latest' ? (stats?.month ? `${stats.month} (当前)` : '当前 (最新)') : (selectedMonth || (config?.issueCycle || '无数据'))}</span>
    {historyStats.length > 0 && (
      <div className="absolute top-full mt-2 right-0 hidden group-hover:flex flex-col bg-slate-800 light:bg-white border border-slate-700 light:border-slate-200 rounded-lg shadow-xl overflow-hidden z-50 min-w-[120px]">
        {stats && (
          <div 
-           className={`px-4 py-2 hover:bg-slate-700 light:hover:bg-slate-100 transition-colors ${selectedMonth === 'latest' ? 'text-indigo-400 light:text-indigo-600 bg-slate-700/50 light:bg-slate-50' : ''}`}
+           className={`px-4 py-2 cursor-pointer hover:bg-slate-700 light:hover:bg-slate-100 transition-colors ${selectedMonth === 'latest' ? 'text-indigo-400 light:text-indigo-600 bg-slate-700/50 light:bg-slate-50' : ''}`}
            onClick={() => setSelectedMonth('latest')}
          >
-           当前 (最新)
+           {stats.month ? `${stats.month} (当前)` : '当前 (最新)'}
          </div>
        )}
        {historyStats.map(h => (
@@ -300,12 +298,13 @@ export function SalaryBindDashboard({ theme, stats, isRunning, onRun, config, on
  {selectedCity === '业务城市' ? (
  <div className="flex-1 overflow-y-auto no-scrollbar space-y-6 pr-2 pb-4">
  {/* Top Overview Cards */}
- <div className="grid grid-cols-5 gap-5 shrink-0">
+ <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-5 shrink-0">
  <StatCard title="骑手总人数" value={displayStats.overall.total_riders} unit="人" />
  <StatCard title="全国总单量" value={displayStats.overall.total_orders} unit="单" />
  <StatCard title="风神绑定率" value={displayStats.overall.fengshen_bind_rate} highlight />
  <StatCard title="全国商翼绑定" value={displayStats.overall.shangyi_bind_rate} highlight />
  <StatCard title="黑户代领人数" value={displayStats.overall.black_count} unit="人" />
+ <StatCard title="绑定总人数" value={(displayStats.overall.fengshen_bind_count || 0) + (displayStats.overall.shangyi_bind_count || 0)} unit="人" highlight />
  </div>
  
  <div className="mt-8 pb-3 text-[15px] font-bold light:text-slate-800 text-slate-300 light:font-medium tracking-[0.2em] font-mono border-b light:border-slate-200 border-sky-500/20 flex items-center">

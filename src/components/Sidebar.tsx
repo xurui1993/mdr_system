@@ -76,17 +76,16 @@ export function Sidebar({
       initial={false}
       animate={{ width: isCollapsed ? 80 : 240 }}
       transition={{ type: "spring", stiffness: 300, damping: 30 }}
-      className="bg-[#030614]/60 light:bg-[#f8fafc]/80 backdrop-blur-xl border-r border-slate-800/50 light:border-slate-200/50 flex flex-col h-full shrink-0 relative z-20 overflow-hidden"
+      className="bg-[#020512]/60 light:bg-[#020512]/95 backdrop-blur-xl border-r border-[#1e293b]/50 flex flex-col h-full shrink-0 relative z-20 overflow-hidden"
     >
       {/* Background Glow */}
       <div className="absolute top-0 left-0 w-full h-full overflow-hidden pointer-events-none z-0">
-        <div className="absolute -top-[100px] -left-[100px] w-[300px] h-[300px] bg-indigo-500/20 light:bg-indigo-400/10 rounded-full blur-[80px]"></div>
-        <div className="absolute top-[40%] -right-[50px] w-[200px] h-[200px] bg-sky-500/10 light:bg-sky-400/10 rounded-full blur-[60px]"></div>
+        <div className="absolute -top-[100px] -left-[100px] w-[300px] h-[300px] bg-indigo-500/20 light:bg-indigo-500/10 rounded-full blur-[80px]"></div>
       </div>
 
       {/* Branding */}
       <div className={`px-5 pt-8 pb-8 flex flex-col items-center relative z-10 ${isCollapsed ? 'justify-center' : ''}`}>
-        <h1 className="font-sans text-2xl font-black tracking-tight text-slate-100 light:text-slate-800 cursor-pointer flex items-center gap-2 group">
+        <h1 className="font-sans text-2xl font-black tracking-tight text-[#f1f5f9] cursor-pointer flex items-center gap-2 group">
           <div className="w-8 h-8 rounded-lg bg-indigo-500/20 text-indigo-400 flex items-center justify-center border border-indigo-500/30 group-hover:scale-110 transition-transform duration-300 shrink-0">
             <Calculator size={18} strokeWidth={2.5} />
           </div>
@@ -105,7 +104,7 @@ export function Sidebar({
           <motion.span 
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            className="text-slate-400 light:text-slate-500 text-xs mt-1.5 font-medium tracking-wide uppercase whitespace-nowrap"
+            className="text-[#94a3b8] text-xs mt-1.5 font-medium tracking-wide uppercase whitespace-nowrap"
           >
             {theme.sub}
           </motion.span>
@@ -113,7 +112,7 @@ export function Sidebar({
       </div>
 
       {/* Menus */}
-      <div className="flex-1 px-3 overflow-y-auto overflow-x-hidden pb-6 scrollbar-thin scrollbar-thumb-slate-700/50 light:scrollbar-thumb-slate-300/50 scrollbar-track-transparent relative z-10">
+      <div className="flex-1 px-3 overflow-y-auto overflow-x-hidden pb-6 scrollbar-thin scrollbar-thumb-[#334155]/50 scrollbar-track-transparent relative z-10">
         <div className="space-y-1.5">
           {MENU_ITEMS.map((item) => {
             const isActive = activeMenu === item.id;
@@ -125,15 +124,15 @@ export function Sidebar({
                 onMouseLeave={handleMouseLeave}
                 className={`w-full flex items-center ${isCollapsed ? 'justify-center px-0' : 'px-3'} py-3 rounded-xl transition-all duration-300 text-[14px] font-medium relative group ${
                   isActive
-                    ? "text-slate-100 light:text-slate-900 bg-white/5 light:bg-slate-200/50 shadow-sm border border-white/5 light:border-slate-300/50"
-                    : "text-slate-400 light:text-slate-500 hover:bg-slate-800/40 light:hover:bg-slate-100/80 hover:text-slate-200 light:hover:text-slate-800 border border-transparent"
+                    ? "text-[#f1f5f9] bg-[#ffffff]/5 shadow-sm border border-[#ffffff]/5"
+                    : "text-[#94a3b8] hover:bg-[#1e293b]/40 hover:text-[#e2e8f0] border border-transparent"
                 }`}
                 title={isCollapsed ? item.label : undefined}
               >
                 {isActive && (
                   <motion.div 
                     layoutId="activeIndicator"
-                    className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 bg-indigo-500 light:bg-indigo-600 rounded-r-full shadow-[0_0_8px_rgba(99,102,241,0.6)]" 
+                    className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-6 bg-indigo-500 rounded-r-full shadow-[0_0_8px_rgba(99,102,241,0.6)]" 
                   />
                 )}
                 {item.id === 'chat' && hasUnreadChat && activeMenu !== 'chat' && (
@@ -156,6 +155,17 @@ export function Sidebar({
             )
           })}
         </div>
+      </div>
+
+      {/* Collapse Toggle */}
+      <div className="p-4 border-t border-[#1e293b]/50 relative z-10 flex justify-center">
+        <button 
+          onClick={() => setIsCollapsed(!isCollapsed)}
+          className={`flex items-center justify-center p-2 rounded-lg text-[#94a3b8] hover:text-[#e2e8f0] hover:bg-[#1e293b]/50 transition-colors ${!isCollapsed ? 'w-full' : ''}`}
+          title={isCollapsed ? "展开侧边栏" : "收起侧边栏"}
+        >
+          {isCollapsed ? <ChevronRight size={20} /> : <ChevronLeft size={20} />}
+        </button>
       </div>
     </motion.div>
   );

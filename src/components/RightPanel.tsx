@@ -211,7 +211,7 @@ export function RightPanel({ theme, activeTab, config, isRunning }: { theme: The
  const getBasePath = () => {
  if (!config) return '';
  if (activeTab === 'output') {
- return internalTab === 'outputs' ? '../outputs' : '../uploads';
+ return internalTab === 'outputs' ? './outputs' : './uploads';
  }
  
  let base = config.sourcePath || config.basePath;
@@ -390,13 +390,13 @@ export function RightPanel({ theme, activeTab, config, isRunning }: { theme: The
   <span className="text-[12px] text-slate-500 my-auto mr-1 font-mono shrink-0">快速访问:</span>
   {internalTab === 'outputs' ? (
   <>
-  <TreeHoverMenu title="问题单生成" basePath="../outputs/问题单生成" fetchFiles={fetchFiles} fetchWithAuth={fetchWithAuth} />
-  <TreeHoverMenu title="兼职薪资" basePath="../outputs/兼职薪资" fetchFiles={fetchFiles} fetchWithAuth={fetchWithAuth} />
-  <TreeHoverMenu title="骑手支付绑定" basePath="../outputs/骑手支付绑定" fetchFiles={fetchFiles} fetchWithAuth={fetchWithAuth} />
+  <TreeHoverMenu title="问题单生成" basePath="./outputs/问题单生成" fetchFiles={fetchFiles} fetchWithAuth={fetchWithAuth} />
+  <TreeHoverMenu title="兼职薪资" basePath="./outputs/兼职薪资" fetchFiles={fetchFiles} fetchWithAuth={fetchWithAuth} />
+  <TreeHoverMenu title="骑手支付绑定" basePath="./outputs/骑手支付绑定" fetchFiles={fetchFiles} fetchWithAuth={fetchWithAuth} />
   </>
   ) : (
   <>
-  <TreeHoverMenu title="我的工作区" basePath={`../uploads/${getWorkspaceId()}`} fetchFiles={fetchFiles} fetchWithAuth={fetchWithAuth} />
+  <TreeHoverMenu title="我的工作区" basePath={`./uploads/${getWorkspaceId()}`} fetchFiles={fetchFiles} fetchWithAuth={fetchWithAuth} />
   </>
   )}
   </div>

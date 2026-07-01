@@ -782,7 +782,7 @@ async def run_issue_orders_task(config, base_path, log_cb, progress_cb, finish_c
             
             mun = 5
             project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-            actual_base_dir = os.path.abspath(os.path.join(project_root, "..", "outputs", "问题单生成"))
+            actual_base_dir = os.path.abspath(os.path.join(project_root, "outputs", "问题单生成"))
             os.makedirs(actual_base_dir, exist_ok=True)
             
             engine = SpiderEngine(config, base_dir=actual_base_dir, target_cities=city_name, log_cb=lambda msg: log_cb(f"   [采集驱动] {msg}", "INFO"))
