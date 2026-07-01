@@ -11,7 +11,7 @@ import { IssueOrderDashboard } from "./components/IssueOrderDashboard";
 import { TerminalPanel } from "./components/TerminalPanel";
 import { TaskTimer } from "./components/TaskTimer";
 import { RightPanel } from "./components/RightPanel";
-import { FolderOpen, Filter, AlertCircle, Download } from "lucide-react";
+import { FolderOpen, Filter, AlertCircle, Download, X } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { SalaryBindDashboard, SalaryBindStatsData } from "./components/SalaryBindDashboard";
 import { DashboardPanel } from "./components/DashboardPanel";
@@ -338,6 +338,11 @@ export default function App() {
     const saved = localStorage.getItem("taskStatsMap");
     return saved ? JSON.parse(saved) : {};
   });
+  
+  const [taskQueue, setTaskQueue] = useState<Array<{ id: string; name: string; estimatedTime: string; status: 'pending' | 'running' | 'completed' | 'error' }>>([]);
+  
+  const [showDownloadModal, setShowDownloadModal] = useState(false);
+  const [downloadableFiles, setDownloadableFiles] = useState<any[]>([]);
 
   const [salaryBindStats, setSalaryBindStats] = useState<SalaryBindStatsData | null>(() => {
     const saved = localStorage.getItem("salaryBindStats");
@@ -605,7 +610,7 @@ export default function App() {
 
   const uploadExtractedFilesAndGetPath = async (
     initialFileList: { file: File; relativePath: string }[]
-  ): Promise<string | null> => {
+  ): Promise<{ path: string, tasks: any[] } | null> => {
     if (!initialFileList || initialFileList.length === 0) {
       return null;
     }
@@ -665,7 +670,7 @@ export default function App() {
       const d = await r.json();
 
       if (d.success && d.path) {
-        return d.path;
+        return { path: d.path, tasks: d.tasks || [] };
       } else {
         throw new Error(d.error || "上传失败");
       }
@@ -753,8 +758,9 @@ export default function App() {
   const uploadFilesAndExecute = async (initialFileList: { file: File; relativePath: string }[]) => {
     seenLogs.current.clear();
 
-    const path = await uploadExtractedFilesAndGetPath(initialFileList);
-    if (path) {
+    const result = await uploadExtractedFilesAndGetPath(initialFileList);
+    if (result) {
+      const { path, tasks } = result;
       setAppConfig((prev) => ({ ...prev, sourcePath: path }));
       setLogs((prev) => [
         ...prev,
@@ -763,10 +769,15 @@ export default function App() {
           level: "SUCCESS",
         },
       ]);
-      showToast("数据源已挂载，自动开始执行", "success");
       
-      // Execute immediately using the new path
-      handleRun({ sourcePath: path });
+      if (tasks && tasks.length > 0) {
+        setTaskQueue(tasks);
+        showToast(`检测到 ${tasks.length} 个子任务，请在队列中确认并执行`, "success");
+      } else {
+        showToast("数据源已挂载，自动开始执行", "success");
+        // Execute immediately using the new path
+        handleRun({ sourcePath: path });
+      }
     }
   };
 
@@ -786,20 +797,14 @@ export default function App() {
       const data = await resp.json();
       const files = data.files || [];
 
-      // Find primary salary sheet ending with .xlsx and not being the special unbound/no-price lists
-      const mainFile = files.find((f: any) => 
-        !f.is_dir && 
-        f.name.endsWith(".xlsx") && 
-        !f.name.includes("无单价") && 
-        !f.name.includes("未绑名单")
-      ) || files.find((f: any) => !f.is_dir && f.name.endsWith(".xlsx"));
-
-      const wid = getWorkspaceId();
-      if (mainFile) {
-        showToast(`正在下载薪资表: ${mainFile.name}`, "success");
-        window.open(`/api/download?path=${encodeURIComponent(mainFile.path)}&workspace_id=${encodeURIComponent(wid)}`, "_blank");
+      const excelFiles = files.filter((f: any) => !f.is_dir && (f.name.endsWith(".xlsx") || f.name.endsWith(".xls") || f.name.endsWith(".csv")));
+      
+      if (excelFiles.length > 0) {
+        setDownloadableFiles(excelFiles);
+        setShowDownloadModal(true);
       } else {
-        showToast("未找到单独的 Excel 文件，正打包整个文件夹下载...", "info");
+        const wid = getWorkspaceId();
+        showToast("未找到单独的表格文件，正打包整个文件夹下载...", "info");
         window.open(`/api/download?path=${encodeURIComponent(lastOutputFolder)}&workspace_id=${encodeURIComponent(wid)}`, "_blank");
       }
     } catch (err) {
@@ -1409,7 +1414,7 @@ export default function App() {
       const saved = localStorage.getItem(`deduction_config_v5_${wid}`);
       if (saved) deductionRules = JSON.parse(saved);
     } catch(e) {}
-    let effectiveConfig = { ...appConfig, deductionRules, ...overrides };
+    let effectiveConfig = { ...appConfig, deductionRules, taskQueue: taskQueue.map(t => t.id), ...overrides };
 
     if (targetAction === "issue_orders" && (!effectiveConfig.issueSelectedCities || effectiveConfig.issueSelectedCities.length === 0)) {
       showToast("请先在UI界面中选取业务城市！", "warn");
@@ -1539,6 +1544,22 @@ export default function App() {
                   setAppConfig((prev) => ({ ...prev, city: parts[1] }));
                 } else {
                   appendLog(data.msg, data.level, targetAction);
+                  if (data.msg.includes("开始执行子任务")) {
+                    const match = data.msg.match(/开始执行子任务 \[.*?\]: (.*)/);
+                    if (match && match[1]) {
+                      setTaskQueue(prev => prev.map(t => t.id === match[1] ? { ...t, status: 'running' } : t));
+                    }
+                  } else if (data.msg.includes("执行成功") && data.msg.includes("子任务")) {
+                    const match = data.msg.match(/子任务 (.*) 执行成功/);
+                    if (match && match[1]) {
+                      setTaskQueue(prev => prev.map(t => t.id === match[1] ? { ...t, status: 'completed' } : t));
+                    }
+                  } else if (data.msg.includes("执行失败") && data.msg.includes("子任务")) {
+                    const match = data.msg.match(/子任务 (.*) 执行失败/);
+                    if (match && match[1]) {
+                      setTaskQueue(prev => prev.map(t => t.id === match[1] ? { ...t, status: 'error' } : t));
+                    }
+                  }
                 }
               } else if (data.type === "progress") {
                 setProgress(Math.floor(data.value * 100), targetAction);
@@ -1756,9 +1777,9 @@ export default function App() {
                   isRunning={runningTask === "core"}
                   onRun={() => handleRun({ action: "core" })}
                   progress={progress}
-                  taskStats={taskStatsMap[activeMenu]}
-                  taskHistory={taskHistory}
-                  activeMenu={activeMenu}
+                  taskQueue={taskQueue}
+                  onRemoveTask={(id) => setTaskQueue(prev => prev.filter(t => t.id !== id))}
+                  onReorderTasks={setTaskQueue}
                 />
               </div>
             </section>
@@ -2026,6 +2047,67 @@ export default function App() {
           onSave={handleSaveProfile}
           onClose={() => setShowProfileEdit(false)}
         />
+      )}
+
+      {showDownloadModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className={`w-full max-w-md p-6 rounded-2xl shadow-2xl border ${theme === 'light' ? 'bg-white border-slate-200' : 'bg-slate-900 border-sky-500/30'}`}>
+            <div className="flex justify-between items-center mb-4">
+              <h3 className={`text-lg font-bold ${theme === 'light' ? 'text-slate-800' : 'text-slate-100'}`}>选择要下载的薪资表</h3>
+              <button 
+                onClick={() => setShowDownloadModal(false)}
+                className={`p-1 rounded-lg transition-colors ${theme === 'light' ? 'hover:bg-slate-100 text-slate-500' : 'hover:bg-slate-800 text-slate-400'}`}
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <div className="flex flex-col gap-2 max-h-[60vh] overflow-y-auto custom-scrollbar pr-1">
+              {downloadableFiles.map((file, idx) => (
+                <button
+                  key={idx}
+                  onClick={() => {
+                    const wid = getWorkspaceId();
+                    window.open(`/api/download?path=${encodeURIComponent(file.path)}&workspace_id=${encodeURIComponent(wid)}`, "_blank");
+                    setShowDownloadModal(false);
+                  }}
+                  className={`flex flex-col items-start p-3 rounded-xl border text-left transition-all ${
+                    theme === 'light' 
+                      ? 'border-slate-200 bg-slate-50 hover:border-sky-300 hover:bg-sky-50 text-slate-700' 
+                      : 'border-slate-700/50 bg-slate-800/40 hover:border-sky-500/50 hover:bg-sky-500/10 text-slate-300'
+                  }`}
+                >
+                  <span className="font-medium text-sm break-all">{file.name}</span>
+                  <div className="flex items-center gap-4 mt-2">
+                    <span className="text-xs opacity-60 flex items-center gap-1">
+                      <Download className="w-3 h-3" /> 点击下载
+                    </span>
+                    <span className="text-xs opacity-60">
+                      {(file.size / 1024).toFixed(1)} KB
+                    </span>
+                  </div>
+                </button>
+              ))}
+            </div>
+            
+            <div className="mt-5 flex justify-end gap-3 pt-4 border-t border-slate-700/30">
+              <button
+                onClick={() => {
+                  const wid = getWorkspaceId();
+                  window.open(`/api/download?path=${encodeURIComponent(lastOutputFolder || '')}&workspace_id=${encodeURIComponent(wid)}`, "_blank");
+                  setShowDownloadModal(false);
+                }}
+                className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+                  theme === 'light'
+                    ? 'text-sky-600 bg-sky-50 hover:bg-sky-100'
+                    : 'text-sky-400 bg-sky-500/10 hover:bg-sky-500/20'
+                }`}
+              >
+                打包下载整个目录 (.zip)
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

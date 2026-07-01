@@ -570,7 +570,16 @@ async function startServer() {
         fs.unlinkSync(zipPath); // Cleanup zip
 
         const absolutePath = path.resolve(targetDir);
-        res.json({ success: true, path: absolutePath, smart: true });
+        const items = fs.readdirSync(targetDir);
+        const subdirs = items.filter(f => fs.statSync(path.join(targetDir, f)).isDirectory() && !f.startsWith('__'));
+        const hasRootExcel = items.some(f => f.endsWith('.xlsx') || f.endsWith('.xls'));
+        
+        let tasks = [];
+        if (subdirs.length > 0 && !hasRootExcel) {
+          tasks = subdirs.map(name => ({ id: name, name, estimatedTime: "约 30 秒" }));
+        }
+
+        res.json({ success: true, path: absolutePath, smart: true, tasks });
       } catch (e) {
         res.status(500).json({ success: false, error: String(e) });
       }

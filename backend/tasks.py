@@ -659,7 +659,7 @@ async def run_summary_parttime_gen(folder, city):
         yield create_log_event(f"合并报表时出现意外: {e}", "ERROR")
         yield create_finish_event("error", str(e))
 
-async def run_main_calculation_gen(city, selected_option, source_folder, base_path, theme, enable_interceptor=False, enable_cross_station_merge=False, deductionRules=None):
+async def run_main_calculation_gen(city, selected_option, source_folder, base_path, theme, enable_interceptor=False, enable_cross_station_merge=False, deductionRules=None, taskQueue=None):
     # 处理逻辑：作为核心异步任务入口，负责启动具体的业务流程计算
     import sys
     import os
@@ -710,11 +710,59 @@ async def run_main_calculation_gen(city, selected_option, source_folder, base_pa
     def worker():
         # 处理逻辑：worker 的主要执行逻辑
         import time
+        import os
         start_time = time.time()
         try:
-            process_rider_data(city, selected_option, source_folder, base_path, log_cb, progress_cb, finish_cb, theme, enable_interceptor=enable_interceptor, enable_cross_station_merge=enable_cross_station_merge, prompt_callback=prompt_cb, deductionRules=deductionRules)
-            elapsed = time.time() - start_time
-            log_cb(f">>> ⏳ 程序执行完毕，共计耗时: {elapsed:.2f} 秒", "SUCCESS")
+            items = os.listdir(source_folder)
+            
+            # Use taskQueue if provided by frontend, else fallback to all subdirs
+            if taskQueue is not None and len(taskQueue) > 0:
+                subdirs = [os.path.join(source_folder, d) for d in taskQueue if os.path.exists(os.path.join(source_folder, d))]
+            else:
+                subdirs = [os.path.join(source_folder, d) for d in items if os.path.isdir(os.path.join(source_folder, d)) and not d.startswith('__')]
+                
+            excel_files_at_root = [f for f in items if f.endswith('.xlsx') or f.endswith('.xls')]
+            
+            if len(subdirs) > 0 and (len(excel_files_at_root) == 0 or taskQueue is not None):
+                log_cb(f">>> 📦 检测到批量任务队列，共有 {len(subdirs)} 个核算任务待执行...", "INFO")
+                all_stats = {}
+                out_folder_final = ""
+                for idx, task_dir in enumerate(subdirs):
+                    task_name = os.path.basename(task_dir)
+                    log_cb(f"\n>>> 🚀 开始执行子任务 [{idx+1}/{len(subdirs)}]: {task_name}", "INFO")
+                    
+                    task_stats = None
+                    task_out = ""
+                    task_error = None
+                    
+                    def batch_finish_cb(status, result_msg, stats_info=None):
+                        nonlocal task_stats, task_out, task_error
+                        if status == 'error':
+                            task_error = result_msg
+                        else:
+                            task_out = result_msg
+                            task_stats = stats_info
+
+                    try:
+                        process_rider_data(city, selected_option, task_dir, base_path, log_cb, progress_cb, batch_finish_cb, theme, enable_interceptor=enable_interceptor, enable_cross_station_merge=enable_cross_station_merge, prompt_callback=prompt_cb, deductionRules=deductionRules)
+                    except Exception as e:
+                        task_error = str(e)
+                        
+                    if task_error:
+                        log_cb(f">>> ❌ 子任务 {task_name} 执行失败: {task_error}，继续下一个...", "ERROR")
+                    else:
+                        if task_stats:
+                            all_stats[task_name] = task_stats
+                        out_folder_final = task_out
+                        log_cb(f">>> ✅ 子任务 {task_name} 执行成功", "SUCCESS")
+                        
+                elapsed = time.time() - start_time
+                log_cb(f"\n>>> ⏳ 批量任务全部执行完毕，共计耗时: {elapsed:.2f} 秒", "SUCCESS")
+                finish_cb("success", out_folder_final or source_folder, {"batch_stats": all_stats})
+            else:
+                process_rider_data(city, selected_option, source_folder, base_path, log_cb, progress_cb, finish_cb, theme, enable_interceptor=enable_interceptor, enable_cross_station_merge=enable_cross_station_merge, prompt_callback=prompt_cb, deductionRules=deductionRules)
+                elapsed = time.time() - start_time
+                log_cb(f">>> ⏳ 程序执行完毕，共计耗时: {elapsed:.2f} 秒", "SUCCESS")
         except Exception as e:
             elapsed = time.time() - start_time
             log_cb(f">>> ⏳ 程序异常终止，共计耗时: {elapsed:.2f} 秒", "ERROR")

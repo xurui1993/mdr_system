@@ -160,7 +160,7 @@ export function ControlPanel({ theme, config, onChangeConfig, onAction, onUpload
               <kbd className="px-1.5 py-0.5 rounded bg-slate-700 light:bg-white border border-slate-600 light:border-slate-200 shadow-sm text-slate-300 light:text-slate-600 font-sans">↑</kbd>
               <kbd className="px-1.5 py-0.5 rounded bg-slate-700 light:bg-white border border-slate-600 light:border-slate-200 shadow-sm text-slate-300 light:text-slate-600 font-sans">↑</kbd>
             </div>
-            <span>上传目录</span>
+            <span>快捷键上传批量目录任务</span>
           </div>
         </div>
       </div>

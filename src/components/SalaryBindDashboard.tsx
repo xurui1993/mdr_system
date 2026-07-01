@@ -138,13 +138,34 @@ export function SalaryBindDashboard({ theme, stats, isRunning, onRun, config, on
  return `${minutes}:${seconds}.${centiseconds}`;
  };
 
+ const [configStats, setConfigStats] = useState<SalaryBindStatsData | null>(null);
+
+ useEffect(() => {
+   if (historyStats.length === 0 && !isRunning) {
+     const configPath = config.salaryBindSourcePath !== "./data" && config.salaryBindSourcePath !== "./uploads" ? config.salaryBindSourcePath + "/config.xlsx" : undefined;
+     fetch("/api/config_excel_data", {
+       method: "POST",
+       headers: { "Content-Type": "application/json" },
+       body: JSON.stringify({ configPath })
+     })
+     .then(res => res.json())
+     .then(data => {
+       if (data.success && data.data) {
+         console.log('Setting config stats:', data.data);
+         setConfigStats(data.data);
+       }
+     })
+     .catch(console.error);
+   }
+ }, [historyStats.length, isRunning, stats, config?.salaryBindSourcePath]);
+
  const rawStats = selectedMonth && selectedMonth !== 'latest'
    ? historyStats.find(h => h.month === selectedMonth)?.stats
    : stats;
    
  const displayStats: SalaryBindStatsData = {
-   overall: rawStats?.overall || EMPTY_STATS.overall,
-   cities: rawStats?.cities || EMPTY_STATS.cities,
+   overall: (rawStats && Object.keys(rawStats.cities || {}).length > 0) ? rawStats.overall : (configStats?.overall || EMPTY_STATS.overall),
+   cities: (rawStats && Object.keys(rawStats.cities || {}).length > 0) ? rawStats.cities : (configStats?.cities && Object.keys(configStats.cities).length > 0 ? configStats.cities : EMPTY_STATS.cities),
    month: rawStats?.month
  };
  
@@ -177,14 +198,6 @@ export function SalaryBindDashboard({ theme, stats, isRunning, onRun, config, on
  {config && onAction && onRun && (
  <div className="flex items-center justify-end gap-4 mb-6 shrink-0 bg-slate-900/60 light:bg-white p-4 rounded-xl border border-slate-700/50 light:border-slate-200 shadow-sm relative overflow-hidden">
  
- {!isRunning && config?.salaryBindSourcePath && (
-  <div className="flex-1 flex flex-col justify-center px-2 overflow-hidden">
-    <div className="text-[12px] text-slate-400 light:text-slate-500 mb-1">目标数据源目录</div>
-    <div className="text-[13px] font-mono text-slate-300 light:text-slate-700 truncate" title={config.salaryBindSourcePath}>
-      {config.salaryBindSourcePath}
-    </div>
-  </div>
-)}
 
  {isRunning && (
  <div className="flex-1 flex flex-col justify-center px-2 relative z-10">
@@ -235,7 +248,7 @@ export function SalaryBindDashboard({ theme, stats, isRunning, onRun, config, on
  className={`w-[132px] h-11 rounded-xl text-[14px] font-bold tracking-wider flex items-center justify-center gap-2 transition-all shrink-0 shadow-sm border relative z-10 ${
  isRunning 
  ? 'bg-slate-800/50 light:bg-slate-200 text-slate-500 cursor-not-allowed border-slate-700/50 light:border-slate-300' 
- : 'bg-slate-200 light:bg-sky-500 hover:bg-white light:hover:bg-sky-600 text-slate-800 light:text-white border-transparent'
+ : 'bg-sky-600 light:bg-sky-500 hover:bg-sky-500 light:hover:bg-sky-600 text-white border-transparent'
  }`}
  >
  {isRunning ? <><Play className="w-4 h-4 shrink-0 animate-pulse text-sky-500" /> 执行中...</> : <><Play className="w-4 h-4 shrink-0" /> 启动任务</>}

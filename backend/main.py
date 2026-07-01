@@ -49,6 +49,7 @@ class ConfigRequest(BaseModel):
     enableInterceptor: bool = False
     enableCrossStationMerge: bool = False
     deductionRules: list = []
+    taskQueue: list = None
 
 class FileRequest(BaseModel):
     path: str
@@ -158,6 +159,43 @@ with open(r"{tmp_path}", "w", encoding="utf-8") as f:
 def get_default_paths():
     # 处理逻辑：获取并返回所需的系统状态或计算数据
     return {"configPath": "./data/config.xlsx", "dataPath": "./uploads"}
+
+class ConfigDataRequest(BaseModel):
+    configPath: str = None
+
+@app.post("/api/config_excel_data")
+def get_config_excel_data(req: ConfigDataRequest):
+    try:
+        import sys
+        import pandas as pd
+        if getattr(sys, 'frozen', False):
+            exe_dir = os.path.dirname(sys.executable)
+            project_root = os.path.dirname(exe_dir) if os.path.basename(exe_dir).lower() in ['dist', 'build'] else exe_dir
+        else:
+            current_file_dir = os.path.dirname(os.path.abspath(__file__))
+            project_root = os.path.dirname(current_file_dir) if os.path.basename(current_file_dir) == 'backend' else current_file_dir
+            
+        config_path = req.configPath or os.path.join(project_root, "data/config.xlsx")
+        if not os.path.exists(config_path):
+            config_path = os.path.join(project_root, "config.xlsx")
+            
+        if not os.path.exists(config_path):
+            return {"success": False, "error": "config file not found"}
+            
+        df = pd.read_excel(config_path, sheet_name=0, dtype=str)
+        cities = {}
+        for index, row in df.iterrows():
+            city = str(row.get('城市', '')).strip()
+            station = str(row.get('团队名称', '')).strip()
+            if city and city.lower() != 'nan':
+                if city not in cities:
+                    cities[city] = []
+                if station and station.lower() != 'nan' and station not in cities[city]:
+                    cities[city].append(station)
+                    
+        return {"success": True, "data": {"cities": cities}}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
 
 @app.post("/api/open/config")
 def open_config(req: FileRequest):
@@ -482,7 +520,8 @@ async def run_calculation(config: ConfigRequest, request: Request):
                     config.theme,
                     config.enableInterceptor,
                     config.enableCrossStationMerge,
-                    deductionRules=config.deductionRules
+                    deductionRules=config.deductionRules,
+                    taskQueue=config.taskQueue
                 ):
                     yield event
                 return
